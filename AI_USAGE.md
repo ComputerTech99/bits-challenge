@@ -20,3 +20,23 @@ I used Claude Code in the terminal, working from `CLAUDE.md` and a written Stage
 
 **Human review**
 I reviewed every change (code, tests, fixtures and documentation) before accepting it, and I can explain each fix. Product decisions not already covered by `CLAUDE.md` were listed for me by Claude Code, and I confirmed them.
+
+## 2026-09-29: Stage 1 follow-up (#26–#30), Claude Code (Claude Opus 5.5)
+
+I gave Claude Code five further issues and a clean-up list, under the same rules as before (reproduce first, one commit per bug with its log row and regression test).
+
+**What Claude Code did**
+- **#26 bell-curve overflow:** added `clustered_marks.xlsx` and a test that records every point on the curve. The test reproduced the overflow (the curve's top was at y ≈ −925 and y ≈ −5.5). The fix scales the y-axis to max(tallest bin, curve peak). This changed the bar height for `large_class`, so the #12 bar-scaling test was updated to assert the new rule exactly (it didn't just get looser bounds).
+- **#27 per-course timer/attempts/messages:** this implements my decision to reverse part of #11. The #11 test that asserted the timer carried on across courses was rewritten to the new rule, and the log says so.
+- **#28 duplicate IDs:** added `duplicate_ids.xlsx`. Claude noticed that its first "different courses are fine" test used fixtures with no shared IDs, so it proved nothing. It added `cross_course_ids.xlsx` to make that check real.
+- **#29 CSV formula injection** (OWASP single-quote prefix) and **#30** (UTF-8 BOM, Blob URL revoked after 40 s). For #30 the test helper now strips the BOM from the text it compares, and the BOM is asserted on the raw bytes.
+- **Clean-up:** confirmed the root copy of the source was byte-identical to `original/` before deleting it, committed `CLAUDE.md`, and removed the LOCKED markers (kept the section names BASE / ANIMATIONS / TIMER as headers). Removed the "Reviewed, not changed" rows that these fixes resolved.
+- **Tests:** 51 tests, 255/255 over 5 repeated runs.
+
+**Where the AI got things wrong, and how that was caught**
+- While rewriting the #11 test it accidentally deleted two shared test helpers. The next full run caught it (5 `ReferenceError`s), and the helpers were restored from the previous commit.
+- The #30 edit first inserted an invisible literal BOM character into the source. Claude spotted it because a `grep` for `uFEFF` came back empty, and replaced it with the visible `﻿` escape.
+- The commits for #1–#25 are missing the `Co-Authored-By` trailer. Rewriting that history was blocked and left for me to decide. The commits from this session include it.
+
+**Human review**
+I reviewed every change in this session (code, tests, fixtures and documentation) before accepting it.
