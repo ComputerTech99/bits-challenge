@@ -506,6 +506,9 @@ resetRanges.onclick=()=>{
 };
 
 function validateRanges(){
+  // The bands must cover the whole 0–100 scale or some students get no grade.
+  if(+document.getElementById("Amax").value!==100) return "Grade A must end at 100.";
+  if(+document.getElementById("Emin").value!==0) return "Grade E must start at 0.";
   for(let i=0;i<GRADES.length;i++){
     const g=GRADES[i];
     const minV=+document.getElementById(g+"min").value;

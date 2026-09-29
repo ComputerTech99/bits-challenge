@@ -111,3 +111,17 @@ test("#7 decimal marks are rounded half-up and every student is exported", async
   await expect(page.locator(".file-guidance")).toContainText("80.2 → 80");
   await expect(page.locator(".file-guidance")).not.toContainText("80.2 → 81");
 });
+
+test("#8 bands must cover 0–100: A max below 100 is rejected", async ({ page }) => {
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
+  await page.selectOption("#Amax", "95");
+  await expect(page.locator("#rangeError")).toContainText("A must end at 100");
+  await expect(page.locator("#download")).toBeDisabled();
+});
+
+test("#8 bands must cover 0–100: E min above 0 is rejected", async ({ page }) => {
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
+  await page.selectOption("#Emin", "5");
+  await expect(page.locator("#rangeError")).toContainText("E must start at 0");
+  await expect(page.locator("#download")).toBeDisabled();
+});
