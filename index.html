@@ -544,8 +544,8 @@ body.grading .empty-state{display:none}
   <div class="actionbar-inner">
     <div class="actionbar-status">
       <div class="change-count" id="changeCount"></div>
-      <div class="error" id="exportError"></div>
-      <div id="thankyou" class="notice"></div>
+      <div class="error" id="exportError" role="alert"></div>
+      <div id="thankyou" class="notice" role="status"></div>
     </div>
     <div class="actions">
       <button class="secondary" id="resetRanges" disabled>Reset cutoffs</button>
@@ -847,9 +847,11 @@ function buildCutoffEditor(){
     row.innerHTML=`
       <label for="${id}"><span class="chip ${gradeClass(g)}">${g}</span> from</label>
       <div class="stepper">
-        <button type="button" class="step" data-step="-1" aria-label="Lower the ${g} cutoff by 1">−</button>
+        <!-- −/+ are for pointers; keyboard users step with ↑/↓ in the input, so
+             the buttons stay out of the tab order (7 stops instead of 21). -->
+        <button type="button" class="step" data-step="-1" tabindex="-1" aria-label="Lower the ${g} cutoff by 1">−</button>
         <input id="${id}" type="number" inputmode="numeric" step="1">
-        <button type="button" class="step" data-step="1" aria-label="Raise the ${g} cutoff by 1">+</button>
+        <button type="button" class="step" data-step="1" tabindex="-1" aria-label="Raise the ${g} cutoff by 1">+</button>
       </div>
       <span class="range num" id="range-${g.replace("-","m")}"></span>`;
     const input=row.querySelector("input");

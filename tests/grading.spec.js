@@ -982,3 +982,78 @@ test("E4: Download grades closes the dialog and attempt counting continues", asy
   await expect(page.locator("#thankyou")).toContainText("in your second attempt");
   expect(second.bytes.equals(first.bytes)).toBe(true);
 });
+
+// ===== Accessibility =====
+
+function contrast(a, b) {
+  const lum = rgb => {
+    const [r, g, bl] = rgb.match(/\d+/g).slice(0, 3).map(v => {
+      const c = Number(v) / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+  };
+  const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+  return (x + 0.05) / (y + 0.05);
+}
+
+test("a11y: text on every grade-ramp step meets WCAG AA (4.5:1)", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  const chips = await page.locator("#gradeSummary .chip").evaluateAll(els =>
+    els.map(e => ({ g: e.textContent, fg: getComputedStyle(e).color, bg: getComputedStyle(e).backgroundColor })));
+  expect(chips).toHaveLength(8);
+  for (const c of chips) expect.soft(contrast(c.fg, c.bg), `grade ${c.g}`).toBeGreaterThanOrEqual(4.5);
+});
+
+test("a11y: errors, notes and count changes are announced", async ({ page }) => {
+  for (const id of ["uploadError", "courseError", "exportError"]) await expect(page.locator(`#${id}`)).toHaveAttribute("role", "alert");
+  await expect(page.locator("#thankyou")).toHaveAttribute("role", "status");
+  await expect(page.locator("#tooltip")).toHaveAttribute("role", "status");
+  await expect(page.locator("#cutoffNote")).toHaveAttribute("aria-live", "polite");
+  await expect(page.locator("#liveRegion")).toHaveAttribute("aria-live", "polite");
+});
+
+test("a11y: the whole flow works from the keyboard alone", async ({ page }) => {
+  await page.keyboard.press("Tab");
+  await expect(page.locator("#instructor")).toBeFocused();
+  await page.keyboard.type("Dr Rao");
+  await page.keyboard.press("Tab");
+  await expect(page.locator("#file")).toBeFocused();
+  // The OS file picker can't be driven by a test; everything else is keyboard-only.
+  await page.locator("#file").setInputFiles(fixture("demo_marks.xlsx"));
+  await expect(page.locator("#course option")).toHaveCount(4);
+  await page.keyboard.press("Tab"); // sample-file link
+  await page.keyboard.press("Tab");
+  await expect(page.locator("#course")).toBeFocused();
+  // Type-ahead picks "Introduction to Programming" (headless tests can't drive
+  // the native option popup that ↓ opens on macOS).
+  await page.keyboard.press("I");
+  await expect(page.locator("body")).toHaveClass(/grading/);
+
+  // Read the chart, then step the A cutoff down twice with the arrow keys.
+  await page.locator("#hist").focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator("#tooltip")).toBeVisible();
+  await page.keyboard.press("Tab");
+  await expect(page.locator("#cut-A")).toBeFocused(); // −/+ are skipped: 7 stops, not 21
+  const start = Number(await page.locator("#cut-A").inputValue());
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+  await expect(page.locator("#cut-A")).toHaveValue(String(start - 2));
+
+  // On to "Review grades", open it, and download from the dialog.
+  for (let i = 0; i < 20 && !(await page.locator("#reviewBtn").evaluate(b => b === document.activeElement)); i++) {
+    await page.keyboard.press("Tab");
+  }
+  await expect(page.locator("#reviewBtn")).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#reviewHeading")).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Back to grading" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.locator("#download")).toBeFocused();
+  const [dl] = await Promise.all([page.waitForEvent("download"), page.keyboard.press("Enter")]);
+  expect(dl.suggestedFilename()).toMatch(/^grades_/);
+  await expect(page.locator("#thankyou")).toContainText("first attempt");
+  await expect(page.locator("#reviewBtn")).toBeFocused();
+});
