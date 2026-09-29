@@ -222,6 +222,72 @@ still on a boundary. It doesn't block the download on any of them.
 
 ---
 
+## Visual redesign
+
+The four enhancements sit on a new foundation built to the CLAUDE.md design
+system. The feel is a calm, institutional mark sheet, and the one bold element
+is the histogram with its grade bands.
+
+- **Layout.** An app bar (title, plus instructor · course · class size · timer
+  once grading starts) sits above a setup panel. The setup panel collapses to a
+  one-line summary with "Edit" once a course is open, keeping the course switcher
+  visible. The workspace is the chart, cutoff editor and stats on the left, with
+  the grade distribution and borderline students on the right. It stacks into
+  one column below 1024px and works at 360px. A sticky action bar holds the
+  change counter, "Reset cutoffs" and "Review grades".
+- **Visual system.**
+  - Colour tokens on `:root`, including a one-hue grade ramp (A darkest to E
+    lightest) used for bars, bands and chips. White text sits on the four
+    darkest steps and ink on the rest, and every step passes WCAG AA (tested).
+  - IBM Plex Sans with a system-font fallback, and tabular numbers.
+  - An 8px spacing grid; 1px-bordered panels with no shadows; 40px controls.
+    The only shadow is on the review dialog.
+- **Setup.**
+  - Every input has a visible label.
+  - A drop zone wraps the real file input (click, or drag and drop), shows the
+    file name and student count once parsed, and carries the format guidance
+    and a "Download a sample file" link.
+  - The name is kept exactly as typed.
+- **Empty and error states.** Before a course is open, the analysis area says
+  what to do next. Upload errors keep their row-level messages, shown in a
+  `--danger` callout. `alert()` is gone: choosing a course without a name gives
+  an inline prompt and moves focus to the name field.
+- **Motion.** The bars grow once when a course opens, and the dialog fades in.
+  Nothing else animates (no hover lifts, no pulsing chips), and
+  `prefers-reduced-motion` disables both.
+- **Polish pass ("remove one accessory").**
+  - The welcome line ("Welcome, Dr Rao. Review the cutoffs…") repeated the name
+    already in the app bar and setup summary and didn't help anyone decide, so
+    it was cut.
+  - Screenshot review also led to:
+    - lighter band tints;
+    - outlines on the two palest ramp steps so their bars stay visible;
+    - dimming the other bars when a borderline student is hovered (a dark bar's
+      outline was invisible);
+    - an adaptive cutoff-editor grid (it overflowed at 1024px);
+    - stacked dialog buttons on phones (a label wrapped inside a 40px button).
+- **Keyboard and screen readers.**
+  - A keyboard-only walkthrough goes from name entry to a downloaded CSV, and
+    runs as a test.
+  - The −/+ stepper buttons are out of the tab order, because ↑/↓ in the input
+    does the same. That cuts the editor from 21 tab stops to 7.
+  - Errors are `role="alert"`; the completion message and chart tooltip are
+    `role="status"`; count changes and clamp notes are `aria-live`.
+  - Every control has a visible `:focus-visible` ring.
+
+| | Before (Stage 1) | After (Stage 2) |
+|---|---|---|
+| Desktop, course open | ![before](docs/screenshots/before/loaded-1440.png) | ![after](docs/screenshots/after/loaded-1440.png) |
+| Phone, course open | ![before](docs/screenshots/before/loaded-390.png) | ![after](docs/screenshots/after/loaded-390.png) |
+| Empty state | ![before](docs/screenshots/before/empty-1440.png) | ![after](docs/screenshots/after/empty-1440.png) |
+
+All seven states (empty, upload error, loaded, cutoff moved, borderline, dialog
+open, downloaded) at 1440, 1024 and 390px are in `docs/screenshots/after/`. They
+are regenerated with
+`SHOTS_OUT=docs/screenshots/after npx playwright test -c playwright.screenshots.config.js scripts/screenshots.spec.js`.
+
+---
+
 ## Stage 1 tests rewritten in Stage 2
 
 When a Stage 2 change legitimately made a Stage 1 test obsolete, the test was
@@ -231,7 +297,8 @@ rewritten to check the same guarantee through the new UI. None was deleted.
 |---|---|---|
 | #23b (no-instructor prompt) | `alert()` is banned by CLAUDE.md, so the prompt became inline (`fix:` commit). | No dialog. The inline message appears, focus moves to the name field, and typing clears it. The previous course is still cleared. |
 | #15, #23b, #27b (retype the name mid-flow) | Setup collapses once a course is open, which hides the name field. | They click "Edit" first (`setInstructor` helper). Assertions unchanged. |
-| Happy path (welcome text) | The welcome text no longer upper-cases the name. | Welcome text shows the name as typed. |
+| Happy path (welcome text) | The welcome text no longer upper-cases the name. Later, the polish pass cut the welcome line. | The name is shown as typed (`Dr Rao`) in the app bar. |
+| #2, #23a (welcome cleared on reset) | The welcome line was cut in the polish pass. | The same guarantee, "no per-course context survives a reset", checked as the app-bar context being hidden. |
 | #12 curve tests (stub context) | The curve became dashed, so the stub needs `setLineDash`. | Unchanged assertions. The stub gained a no-op `setLineDash`. |
 | #8 ×2 (A ends at 100, E starts at 0) | E1 removed the Min/Max selects. | Typing A 150 clamps to 100 (A: 100–100), and nobody is dropped from the export. E has no input, and D can't go below 1 (E: 0–0). |
 | #9 (single-mark band) | E1 | A from 100 gives A: 100–100 with no clamp note, and the export grades 100 as A and 80 as A-. |

@@ -40,3 +40,51 @@ I gave Claude Code five further issues and a clean-up list, under the same rules
 
 **Human review**
 I reviewed every change in this session (code, tests, fixtures and documentation) before accepting it.
+
+## 2026-09-29: Stage 2 (Reimagine), Claude Code (Claude Opus 5.5)
+
+I gave Claude Code the Stage 2 brief (E1–E4, a visual foundation, and a polish
+pass). It planned in plan mode first and asked me three questions: the
+borderline action rule, how to handle the lift/pulse tests, and the
+`stage-1-complete` tag. I approved the plan before any code was written.
+
+**What Claude Code did**
+- **Safety nets first:**
+  - It added my demo file with a ground-truth test (Introduction to Programming:
+    Min 0, Max 100, Avg 60.78, Median 64, A 8 · A- 17 · B 10 · B- 13 · C 9 ·
+    C- 4 · D 1 · E 2), confirmed against the Stage 1 app.
+  - It captured "golden" CSV exports from the Stage 1 app (three courses with
+    default cutoffs, plus A 78 / B- 52). Every later commit had to reproduce them
+    byte for byte.
+- **Foundation (3 `style:` commits + 1 `fix:`):** design tokens and IBM Plex, the
+  app bar, panel grid and sticky action bar; a labelled setup panel with a drop
+  zone, sample-file link and collapse/Edit; the empty state and error callouts.
+  It also replaced a leftover `alert()` with an inline prompt.
+- **E1–E4, one `feat:` commit each** with its ENHANCEMENTS.md entry and tests:
+  - E1: the cutoff editor, with `gradeFor()` as the single grading function;
+  - E2: the interactive SVG histogram;
+  - E3: the borderline students panel;
+  - E4: the review dialog.
+- **Polish:** screenshots of 7 states × 3 widths, reviewed and fixed; a keyboard
+  and screen-reader pass; the welcome line cut as redundant.
+- **Tests:** 51 → 91 Playwright tests. Every Stage 1 test that the redesign made
+  obsolete was rewritten to check the same guarantee through the new UI. None
+  was deleted, and each rewrite is listed in ENHANCEMENTS.md.
+
+**Where the AI got things wrong, and how that was caught**
+- A CSS cut used an ambiguous anchor and duplicated part of the stylesheet. It
+  was caught by counting rules, reverted, and redone with exact anchors.
+- The E2 cutoff handles had 20px invisible grab strips that swallowed hover on
+  the bars either side of every cutoff. A test caught it, and the strips were
+  narrowed to 6px.
+- After E4 moved "Download" into the dialog, three tests still checked that the
+  old button was enabled. They were passing vacuously, because the button now
+  sat inside a closed dialog. They were repointed to "Review grades".
+- One test's expected numbers were computed by hand and were wrong. They were
+  re-derived from the fixture rather than copied from the app's output.
+- The demo file was in `~/Downloads`, not the repo root. It was copied (not
+  moved), so the original stays where I left it.
+
+**Human review**
+I reviewed every change in this session (code, tests, fixtures, screenshots and
+documentation) before accepting it.

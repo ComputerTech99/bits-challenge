@@ -1,5 +1,52 @@
 # BITS Digital CodeForge: Grading Console
 
-A single-file web app (`index.html`) built for the BITS Digital CodeForge challenge. It is a prototype, not an official BITS tool. An instructor uploads an Excel file of student marks (columns BITS ID, Course, Total Marks), picks a course, reviews the histogram, bell curve and summary statistics, adjusts the eight grade bands (A … E), and downloads the final grades as a CSV. The app has no build step and its only runtime dependency is SheetJS 0.18.5 from jsDelivr, so you can open `index.html` directly or serve the folder with `npx serve .`. Node is only needed for the dev tooling: run `npm install` once, then `node fixtures/generate.js` to regenerate the `.xlsx` test fixtures and `npx playwright install chromium && npx playwright test` to run the Playwright suite (it starts a local server itself). Bug fixes are documented in [`BUG_FIX_LOG.md`](BUG_FIX_LOG.md) and AI-tool use in [`AI_USAGE.md`](AI_USAGE.md).
+A single-file web app (`index.html`) that helps an instructor decide fair grade
+cutoffs for a course and submit the grades. It was built for the BITS Digital
+CodeForge challenge and is a prototype, not an official BITS tool.
 
 **Live URL:** _coming soon (GitHub Pages)_
+
+**Try it:** [download the sample marks file](fixtures/demo_marks.xlsx) (3
+courses, 148 students), open the app, enter a name, and drop the file onto the
+upload area.
+
+## What it does
+- **Upload** an Excel file (`.xlsx` or `.xls`) with the columns BITS ID, Course
+  and Total Marks. Bad rows are rejected with row-level messages (missing or
+  out-of-range marks, duplicate IDs in a course, and so on).
+- **See the distribution:** one bar per mark, coloured by the grade it currently
+  gets, with grade bands, a bell curve, and Min / Max / Avg / Median / Std dev.
+- **Set cutoffs** by dragging the lines on the chart or using the seven "from"
+  controls. Ranges are always continuous from 0 to 100, so an invalid set can't
+  be entered.
+- **Check borderline students:** everyone within 1–3 marks below a cutoff, with
+  a one-click "Lower A to 78 (+3 students)".
+- **Review, then download.** A review dialog summarises the grade counts, the
+  cutoffs changed from the defaults, and anyone still on a boundary before the
+  CSV downloads. The CSV format is identical to Stage 1.
+
+Details: [ENHANCEMENTS.md](ENHANCEMENTS.md) (Stage 2),
+[BUG_FIX_LOG.md](BUG_FIX_LOG.md) (Stage 1, bugs #1–#30),
+[AI_USAGE.md](AI_USAGE.md) (how AI tools were used).
+
+## Run it locally
+There's no build step. The only runtime dependencies are SheetJS 0.18.5 and IBM
+Plex Sans from CDNs, with a system-font fallback. Open `index.html` directly, or
+serve the folder:
+
+```sh
+npx serve .
+```
+
+## Develop and test
+Node is only needed for the dev tooling:
+
+```sh
+npm install
+npx playwright install chromium
+node fixtures/generate.js   # regenerate the .xlsx test fixtures
+npx playwright test         # run the Playwright suite (starts its own server)
+```
+
+Screenshots for the docs are generated with
+`SHOTS_OUT=docs/screenshots/after npx playwright test -c playwright.screenshots.config.js scripts/screenshots.spec.js`.
