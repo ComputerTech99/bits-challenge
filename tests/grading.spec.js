@@ -1,7 +1,7 @@
 // Regression tests for the Stage 1 bug fixes. Test names reference the
 // row number in BUG_FIX_LOG.md.
 const { test, expect } = require("@playwright/test");
-const { openApp, upload, startGrading, stat, download, courseOptions, gradeCounts } = require("./helpers");
+const { openApp, upload, startGrading, stat, download, courseOptions, gradeCounts, setInstructor } = require("./helpers");
 
 const XLSX = require("xlsx");
 const { fixture } = require("./helpers");
@@ -303,7 +303,7 @@ test("#14 quotes in a course name are doubled", async ({ page }) => {
 
 test("#15 export is blocked inline when the instructor name is empty", async ({ page }) => {
   await startGrading(page, "valid_basic.xlsx", "CS F211");
-  await page.fill("#instructor", "   ");
+  await setInstructor(page, "   ");
   let downloaded = false;
   page.on("download", () => { downloaded = true; });
   await page.click("#download");
@@ -312,7 +312,7 @@ test("#15 export is blocked inline when the instructor name is empty", async ({ 
   expect(downloaded).toBe(false);
   await expect(page.locator("#thankyou")).toBeEmpty();
 
-  await page.fill("#instructor", "Dr Rao");
+  await setInstructor(page, "Dr Rao");
   await expect(page.locator("#exportError")).toBeEmpty();
   const { text } = await download(page);
   expect(text).toMatch(/^Instructor,Dr Rao\n/);
@@ -412,7 +412,7 @@ test("#23 going back to the placeholder clears the grading view and disables exp
 
 test("#23 the no-instructor alert does not leave the previous course on screen", async ({ page }) => {
   await startGrading(page, "valid_basic.xlsx", "CS F211");
-  await page.fill("#instructor", "");
+  await setInstructor(page, "");
   page.on("dialog", d => d.accept());
   await page.selectOption("#course", "MATH F112");
   await expect(page.locator("#course")).toHaveValue("");
@@ -445,7 +445,8 @@ test("#25 an unreadable file shows an inline error instead of throwing", async (
 
 test("happy path: upload, select course, adjust a range, export the right grades", async ({ page }) => {
   await startGrading(page, "valid_basic.xlsx", "CS F211");
-  await expect(page.locator("#welcome")).toHaveText("Welcome DR RAO. Please review and finalize grading.");
+  // Stage 2: the name is shown as typed, not upper-cased.
+  await expect(page.locator("#welcome")).toHaveText("Welcome, Dr Rao. Review the cutoffs, then finalize the grades.");
   await expect(page.locator("#grades .grade")).toHaveCount(8);
   await expect(page.locator("#download")).toBeEnabled();
 
@@ -519,7 +520,7 @@ test("#27 a new upload resets the timer, attempt count and both messages", async
   await startGrading(page, "valid_basic.xlsx", "CS F211");
   await page.clock.fastForward(7_000);
   await download(page);
-  await page.fill("#instructor", "");
+  await setInstructor(page, "");
   await page.click("#download");
   await expect(page.locator("#exportError")).not.toBeEmpty();
   await expect(page.locator("#thankyou")).not.toBeEmpty();
@@ -530,7 +531,7 @@ test("#27 a new upload resets the timer, attempt count and both messages", async
   await expect(page.locator("#exportError")).toBeEmpty();
   await expect(page.locator("#timerText")).toHaveText("00:00");
 
-  await page.fill("#instructor", "Dr Rao");
+  await setInstructor(page, "Dr Rao");
   await page.selectOption("#course", "BIO F110");
   await page.clock.fastForward(3_000);
   await download(page);
@@ -612,3 +613,42 @@ for (const [file, course] of [
     expect(bytes.equals(require("fs").readFileSync(require("path").join(GOLDEN, file)))).toBe(true);
   });
 }
+
+// ===== Stage 2 foundation =====
+
+test("setup: every input has a visible label", async ({ page }) => {
+  for (const [id, text] of [["instructor", "Instructor name"], ["file", "Marks file"], ["course", "Course"]]) {
+    const label = page.locator(`label[for="${id}"]`);
+    await expect(label).toBeVisible();
+    await expect(label).toHaveText(text);
+  }
+});
+
+test("setup: a file dropped on the drop zone is loaded, and its name and size are shown", async ({ page }) => {
+  const bytes = [...require("fs").readFileSync(require("./helpers").fixture("demo_marks.xlsx"))];
+  await page.evaluate(bytes => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([new Uint8Array(bytes)], "demo_marks.xlsx"));
+    document.getElementById("dropzone").dispatchEvent(new DragEvent("drop", { dataTransfer: dt, bubbles: true, cancelable: true }));
+  }, bytes);
+  await expect(page.locator("#course option")).toHaveCount(4);
+  await expect(page.locator("#dzTitle")).toHaveText("demo_marks.xlsx");
+  await expect(page.locator("#dzMeta")).toContainText("148 students in 3 courses");
+});
+
+test("setup: the sample file link points at the demo file", async ({ page, request }) => {
+  const link = page.getByRole("link", { name: "Download a sample file" });
+  await expect(link).toHaveAttribute("href", "fixtures/demo_marks.xlsx");
+  expect((await request.get("/fixtures/demo_marks.xlsx")).ok()).toBe(true);
+});
+
+test("setup: collapses to a summary once a course is open, and Edit expands it", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", "Introduction to Programming");
+  await expect(page.locator("#setupSummaryText")).toHaveText("Dr Rao · demo_marks.xlsx · 148 students");
+  await expect(page.locator("#instructor")).toBeHidden();
+  await expect(page.locator("#course")).toBeVisible(); // switching course stays one click away
+  await page.click("#editSetup");
+  await expect(page.locator("#instructor")).toBeVisible();
+  await expect(page.locator("#instructor")).toBeFocused();
+  await expect(page.locator("#instructor")).toHaveValue("Dr Rao"); // kept as typed
+});

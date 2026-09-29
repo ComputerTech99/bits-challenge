@@ -53,10 +53,17 @@ async function courseOptions(page) {
   return page.locator("#course option").evaluateAll(opts => opts.map(o => o.value));
 }
 
+// Type an instructor name. Once a course is open the setup collapses, so
+// open it with "Edit" first (the name field is hidden until then).
+async function setInstructor(page, name) {
+  if (!(await page.locator("#instructor").isVisible())) await page.click("#editSetup");
+  await page.fill("#instructor", name);
+}
+
 // Per-grade student counts as shown in the grade distribution, e.g. { A: 8, "A-": 17, ... }.
 async function gradeCounts(page) {
   const texts = await page.locator("#gradeSummary span").allTextContents();
   return Object.fromEntries(texts.map(t => { const [g, n] = t.split(":"); return [g.trim(), Number(n)]; }));
 }
 
-module.exports = { openApp, fixture, upload, startGrading, stat, download, courseOptions, gradeCounts };
+module.exports = { openApp, fixture, upload, startGrading, stat, download, courseOptions, gradeCounts, setInstructor };

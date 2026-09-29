@@ -110,17 +110,58 @@ input,select{
 }
 input:hover,select:hover{border-color:#c9c3de}
 
-/* ===== Subtle file guidance ===== */
-.file-guidance{
-  grid-column:2 / 3;
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+label,.label{font-size:14px;font-weight:500;color:var(--ink)}
+.help{margin:0;font-size:12px;color:var(--ink-muted)}
+a{color:var(--accent)}
+
+/* ===== FILE DROP ZONE ===== */
+.dropzone{
+  position:relative;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:2px;
+  min-height:64px;
   padding:8px 12px;
-  font-size:12px;
-  color:var(--ink-muted);
-  background:var(--canvas);
+  border:1px dashed #c9c3de;
   border-radius:var(--radius-control);
+  background:var(--canvas);
 }
-.file-guidance summary{cursor:pointer;font-weight:500;color:var(--accent-strong)}
-.file-guidance p{margin:8px 0 0}
+.dropzone:hover,.dropzone.dragover{border-color:var(--accent);background:var(--g-E)}
+.dropzone:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.dropzone input[type=file]{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  opacity:0;
+  cursor:pointer;
+}
+.dz-title{font-weight:500;overflow-wrap:anywhere}
+.dz-link{color:var(--accent);text-decoration:underline}
+.dz-meta{font-size:12px;color:var(--ink-muted)}
+
+/* ===== SETUP COLLAPSE ===== */
+.setup{display:flex;flex-direction:column;gap:12px}
+.setup-summary{display:none;align-items:center;gap:8px;flex-wrap:wrap}
+.setup.collapsed .setup-summary{display:flex}
+.setup.collapsed .setup-detail{display:none}
+/* Collapsed: summary and an inline course switcher on one row (wraps when narrow). */
+.setup.collapsed{flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 24px}
+.setup.collapsed .controls{display:block}
+.setup.collapsed .controls .field{flex-direction:row;align-items:center;gap:8px}
+.setup.collapsed #course{width:min(360px, 60vw)}
+.setup.collapsed #uploadError{flex-basis:100%}
+button.link{
+  height:auto;
+  padding:0;
+  background:none;
+  border:none;
+  color:var(--accent);
+  text-decoration:underline;
+}
+.error{white-space:pre-line}
 
 button{
   font:inherit;
@@ -232,7 +273,6 @@ button:disabled{opacity:.45;cursor:not-allowed}
 @media (max-width:1023px){
   .workspace{grid-template-columns:minmax(0,1fr)}
   .controls{grid-template-columns:1fr}
-  .file-guidance{grid-column:auto}
 }
 @media (max-width:600px){
   .appbar,.container,.actionbar-inner{padding-left:16px;padding-right:16px}
@@ -260,35 +300,37 @@ button:disabled{opacity:.45;cursor:not-allowed}
 
 <main class="container">
 
-<div class="controls">
-  <input id="instructor" placeholder="Instructor name (mandatory)">
-  <input type="file" id="file" accept=".xlsx,.xls">
-  <select id="course"><option value="">Select a course to begin</option></select>
-
-  <!-- Optional, calm guidance BELOW file upload -->
-  <details class="file-guidance">
-    <summary>Marks file format guidance</summary>
-    <p>
-      The uploaded Excel file should contain exactly three columns:
-      <b>BITS ID</b>, <b>Course</b>, and <b>Total Marks</b>.
-    </p>
-    <p>
-      Total Marks should be entered as whole numbers. Fractional values
-      are rounded to the nearest integer on upload (for example,
-      80.2 → 80 and 79.5 → 80).
-    </p>
-    <p>
-      Students who did not appear for the trimester-end examination and are
-      to be awarded an <b>NC</b> grade should not be included in the file.
-    </p>
-    <p>
-      This console is intended for grading only those students who appeared
-      for the examination.
-    </p>
-  </details>
-</div>
-
-<div id="uploadError" class="error"></div>
+<section class="panel setup" id="setup" aria-label="Setup">
+  <div class="setup-summary" id="setupSummary">
+    <span id="setupSummaryText"></span>
+    <button type="button" class="link" id="editSetup">Edit</button>
+  </div>
+  <div class="controls">
+    <div class="field setup-detail">
+      <label for="instructor">Instructor name</label>
+      <input id="instructor" autocomplete="name">
+    </div>
+    <div class="field setup-detail">
+      <label for="file">Marks file</label>
+      <div class="dropzone" id="dropzone">
+        <!-- The real input covers the zone: click opens the picker, and it stays keyboard-focusable. -->
+        <input type="file" id="file" accept=".xlsx,.xls">
+        <span class="dz-title" id="dzTitle">Drop an Excel file here, or <span class="dz-link">choose a file</span></span>
+        <span class="dz-meta" id="dzMeta">.xlsx or .xls with columns BITS ID, Course, Total Marks</span>
+      </div>
+      <p class="help file-guidance">
+        Marks are rounded to whole numbers on upload (for example, 80.2 → 80 and 79.5 → 80).
+        Leave out students receiving an NC grade.
+        <a href="fixtures/demo_marks.xlsx" download>Download a sample file</a>
+      </p>
+    </div>
+    <div class="field">
+      <label for="course">Course</label>
+      <select id="course"><option value="">Select a course</option></select>
+    </div>
+  </div>
+  <div id="uploadError" class="error" role="alert"></div>
+</section>
 
 <div id="welcome" class="notice"></div>
 
@@ -382,6 +424,7 @@ function resetGradingView(){
   rangeError.innerText="";
   gradeSummary.innerHTML="";
   welcome.innerText="";
+  setup.classList.remove("collapsed"); // no course open: show the full setup
   ["min","max","avg","med"].forEach(id=>document.getElementById(id).textContent="—");
   cancelAnimationFrame(histFrame);
   hist.getContext("2d").clearRect(0,0,380,240);
@@ -468,15 +511,25 @@ function parseMarksSheet(sheet){
   return {errors:[], rows};
 }
 
-file.onchange=e=>{
-  const f=e.target.files[0];
+let loadedFileName="";
+
+// Shows what the drop zone holds: the file name plus a status line.
+function showFileStatus(title,meta){
+  dzTitle.textContent=title;
+  dzMeta.textContent=meta;
+}
+
+// Reads a marks file chosen with the picker or dropped on the drop zone.
+function loadFile(f){
   if(!f) return; // dialog cancelled: keep whatever is already loaded
 
   // A new upload replaces the old one completely.
   data=[];
+  loadedFileName="";
   course.options.length=1; // keep only the placeholder option
   resetGradingView();
   uploadError.innerText="";
+  showFileStatus(f.name,"Reading…");
   const r=new FileReader();
   r.onload=ev=>{
     let parsed;
@@ -486,19 +539,46 @@ file.onchange=e=>{
     }catch(err){
       // Not a spreadsheet SheetJS can open (corrupt, password-protected, ...).
       uploadError.innerText=`"${f.name}" could not be read as an Excel file. Please check the file and upload it again.`;
+      showFileStatus(f.name,"Not loaded. Choose or drop another file.");
       return;
     }
     if(parsed.errors.length){
       uploadError.innerText=parsed.errors.join("\n");
+      showFileStatus(f.name,"Not loaded. Fix the rows listed below and upload it again.");
       return;
     }
     data=parsed.rows;
+    loadedFileName=f.name;
     // One option per distinct course, not one per student row.
-    [...new Set(data.map(d=>d.Course))].forEach(c=>{
+    const courses=[...new Set(data.map(d=>d.Course))];
+    courses.forEach(c=>{
       course.add(new Option(c,c));
     });
+    showFileStatus(f.name,
+      `${data.length} students in ${courses.length} ${courses.length===1?"course":"courses"}. Choose or drop another file to replace it.`);
   };
   r.readAsArrayBuffer(f);
+}
+
+file.onchange=e=>loadFile(e.target.files[0]);
+
+// Drag and drop onto the zone uses the same loader as the picker.
+dropzone.addEventListener("dragover",e=>{ e.preventDefault(); dropzone.classList.add("dragover"); });
+dropzone.addEventListener("dragleave",()=>dropzone.classList.remove("dragover"));
+dropzone.addEventListener("drop",e=>{
+  e.preventDefault();
+  dropzone.classList.remove("dragover");
+  loadFile(e.dataTransfer.files[0]);
+});
+
+// Once a course is open the setup collapses to one line; Edit expands it again.
+function collapseSetup(){
+  setupSummaryText.textContent=`${instructor.value.trim()} · ${loadedFileName} · ${data.length} students`;
+  setup.classList.add("collapsed");
+}
+editSetup.onclick=()=>{
+  setup.classList.remove("collapsed");
+  instructor.focus();
 };
 
 course.onchange=()=>{
@@ -511,7 +591,8 @@ course.onchange=()=>{
     course.value="";
     return;
   }
-  welcome.innerText=`Welcome ${instructor.value.toUpperCase()}. Please review and finalize grading.`;
+  welcome.innerText=`Welcome, ${instructor.value.trim()}. Review the cutoffs, then finalize the grades.`;
+  collapseSetup();
   startTimer();
   previousSummary={}; // a new course is not a change to pulse about
   buildGradeUI();
