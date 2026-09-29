@@ -256,7 +256,9 @@ is the histogram with its grade bands.
 - **Logo.** `assets/logo.png` is trimmed and scaled to 2× its 48px display
   height by `scripts/make-logo.mjs`, then inlined as a ~10 KB WebP data URI.
   The app stays a single self-contained `index.html`. The logo is the page's
-  `<h1>`, with `alt="BITS Pilani Digital"`. Its seal keeps its own brand colours;
+  `<h1>`, with `alt="BITS Pilani Digital"`. The browser tab uses the seal alone
+  as a 64px favicon on a transparent background (the full lockup is unreadable
+  at tab size), also inlined. Its seal keeps its own brand colours;
   the "nothing else is ever red" rule applies to UI colour, not to the logo.
 - **Motion.** The bars grow once when a course opens, and the dialog fades in.
   Nothing else animates (no hover lifts, no pulsing chips), and

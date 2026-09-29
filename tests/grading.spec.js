@@ -1080,3 +1080,13 @@ test("brand: the logo is the page heading, loads from inside index.html, and has
   expect(await logo.evaluate(img => img.complete && img.naturalWidth > 0)).toBe(true);
   expect((await logo.boundingBox()).height).toBe(48);
 });
+
+test("brand: the tab shows the BITS seal as an inline favicon", async ({ page }) => {
+  const href = await page.locator('link[rel="icon"]').getAttribute("href");
+  expect(href).toMatch(/^data:image\/png;base64,/);
+  const size = await page.evaluate(async src => {
+    const img = new Image(); img.src = src; await img.decode();
+    return [img.naturalWidth, img.naturalHeight];
+  }, href);
+  expect(size).toEqual([64, 64]);
+});
