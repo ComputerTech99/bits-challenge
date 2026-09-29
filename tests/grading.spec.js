@@ -1123,3 +1123,73 @@ test("#31 a new upload clears every course's cutoffs", async ({ page }) => {
   await page.selectOption("#course", INTRO);
   await expect(cutoffInput(page, "A")).toHaveValue("80");
 });
+
+// Page position of a cutoff line (its boundary x) and the plot's vertical middle.
+async function handlePoint(page, grade) {
+  const x = await markToPageX(page, await cutoffInput(page, grade).inputValue().then(Number));
+  const box = await page.locator("#hist").boundingBox();
+  return { x, y: box.y + box.height / 2 };
+}
+
+test("#32 a handle can be grabbed 10px either side of its line", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  for (const [grade, offset, to] of [["A", 10, 78], ["B", -10, 57]]) {
+    const p = await handlePoint(page, grade);
+    await page.mouse.move(p.x + offset, p.y);
+    await page.mouse.down();
+    await page.mouse.move(await markToPageX(page, to) + offset, p.y, { steps: 8 });
+    await page.mouse.up();
+    await expect(cutoffInput(page, grade)).toHaveValue(String(to));
+  }
+});
+
+test("#32 a drag keeps going when the pointer leaves the chart", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  const p = await handlePoint(page, "A");
+  const box = await page.locator("#hist").boundingBox();
+  await page.mouse.move(p.x, p.y);
+  await page.mouse.down();
+  await page.mouse.move(p.x, box.y - 60, { steps: 4 });                          // off the top of the chart
+  await page.mouse.move(await markToPageX(page, 75), box.y - 60, { steps: 6 });  // still dragging
+  await page.mouse.up();
+  await expect(cutoffInput(page, "A")).toHaveValue("75");
+});
+
+// Touch input through CDP, so the browser decides between drag and scroll as it
+// would on a phone (Playwright's touchscreen API only taps).
+async function touchSwipe(page, from, to, steps = 12) {
+  const cdp = await page.context().newCDPSession(page);
+  const point = (t) => [{ x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t }];
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: point(0) });
+  for (let i = 1; i <= steps; i++) {
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: point(i / steps) });
+    await page.waitForTimeout(16);
+  }
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await page.waitForTimeout(300); // let any scroll settle
+}
+
+test.describe("#32 touch at 390px", () => {
+  test.use({ viewport: { width: 390, height: 700 }, hasTouch: true, isMobile: true });
+
+  test("#32 dragging a handle by touch moves the cutoff and does not scroll the page", async ({ page }) => {
+    await startGrading(page, "demo_marks.xlsx", INTRO);
+    await page.locator("#hist").scrollIntoViewIfNeeded();
+    const before = await page.evaluate(() => scrollY);
+    const p = await handlePoint(page, "A");
+    await touchSwipe(page, p, { x: await markToPageX(page, 74), y: p.y + 30 });
+    await expect(cutoffInput(page, "A")).toHaveValue("74");
+    expect(await page.evaluate(() => scrollY)).toBe(before);
+  });
+
+  test("#32 swiping on the chart away from a handle still scrolls the page", async ({ page }) => {
+    await startGrading(page, "demo_marks.xlsx", INTRO);
+    await page.locator("#hist").scrollIntoViewIfNeeded();
+    const before = await page.evaluate(() => scrollY);
+    const x = await markToPageX(page, 8, { centre: true }); // E band, no handle nearby
+    const box = await page.locator("#hist").boundingBox();
+    await touchSwipe(page, { x, y: box.y + box.height - 20 }, { x, y: box.y + 20 });
+    expect(await page.evaluate(() => scrollY)).toBeGreaterThan(before + 50);
+    await expect(cutoffInput(page, "D")).toHaveValue("20");
+  });
+});

@@ -201,7 +201,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 #hist.has-highlight .bar:not(.highlight){opacity:.25}
 #hist .cutoff-line{stroke:var(--accent-strong);stroke-width:1.5}
 #hist .cutoff-knob{fill:var(--surface);stroke:var(--accent-strong);stroke-width:1.5}
-#hist .cutoff-handle{cursor:ew-resize;touch-action:none}
+#hist .cutoff-handle,#hist .handle-hit{cursor:ew-resize;touch-action:none}
 #hist .cutoff-handle:hover .cutoff-line,#hist .cutoff-handle.dragging .cutoff-line{stroke:var(--accent);stroke-width:2.5}
 #hist .cutoff-handle:hover .cutoff-knob,#hist .cutoff-handle.dragging .cutoff-knob{stroke:var(--accent);fill:var(--g-E)}
 #hist .handle-hit{fill:transparent}
@@ -1155,15 +1155,24 @@ function buildChart(animate){
   }
 
   // Cutoff handles: pointer-only (the cutoff inputs are the keyboard route).
+  // Each has a full-height grab strip, 24px wide (44px for touch), centred on
+  // its line. The strip covers the bars either side of a cutoff (the marks
+  // that matter most), so hovering it shows the tooltip of the mark underneath.
+  const hitWidth=matchMedia("(pointer: coarse)").matches ? 44 : 24;
+  chart.hitWidth=hitWidth;
   const handleLayer=svgEl("g",{class:"handles","aria-hidden":"true"},hist);
   CUTOFF_GRADES.forEach(g=>{
     const h=svgEl("g",{class:"cutoff-handle","data-grade":g},handleLayer);
-    // A narrow full-height grab strip, so hovering the bars either side of a
-    // cutoff (the marks that matter most) still shows their tooltips.
-    svgEl("rect",{class:"handle-hit",y:m.top,width:6,height:plotH},h);
+    svgEl("rect",{class:"handle-hit",y:m.top,width:hitWidth,height:plotH},h);
     svgEl("line",{class:"cutoff-line",y1:m.top,y2:base},h);
     svgEl("rect",{class:"cutoff-knob",y:m.top+4,width:12,height:22,rx:3},h);
     h.addEventListener("pointerdown",e=>startDrag(e,g,h));
+    // Only a handle blocks touch scrolling; a swipe anywhere else on the chart
+    // still scrolls the page. (In Chromium, touch-action on SVG children alone
+    // didn't stop the page panning mid-drag; test #32 checks this.)
+    h.addEventListener("touchstart",e=>e.preventDefault(),{passive:false});
+    h.addEventListener("pointermove",e=>{ if(!h.classList.contains("dragging")) showMarkTooltip(markAt(e.clientX)); });
+    h.addEventListener("pointerleave",()=>{ if(!h.classList.contains("dragging")) hideMarkTooltip(); });
     chart.handles[g]=h;
   });
 
@@ -1191,7 +1200,7 @@ function updateChart(){
   });
   CUTOFF_GRADES.forEach(g=>{
     const h=chart.handles[g], cx=x(cutoffs[g]); // boundary = left edge of the cutoff mark
-    h.querySelector(".handle-hit").setAttribute("x",cx-3);
+    h.querySelector(".handle-hit").setAttribute("x",cx-chart.hitWidth/2);
     const line=h.querySelector(".cutoff-line");
     line.setAttribute("x1",cx); line.setAttribute("x2",cx);
     h.querySelector(".cutoff-knob").setAttribute("x",cx-6);
@@ -1200,14 +1209,29 @@ function updateChart(){
 
 // Dragging a handle snaps to whole marks and goes through setCutoff(), so it
 // obeys exactly the same limits as the inputs.
+// The mark whose left edge is nearest a page x (cutoffs sit on left edges).
+function boundaryAt(clientX){
+  const box=hist.getBoundingClientRect();
+  const px=(clientX-box.left)*(chart.W/box.width);
+  return Math.round((px-chart.m.left)/chart.step);
+}
+// The mark whose bar is under a page x.
+function markAt(clientX){
+  const box=hist.getBoundingClientRect();
+  const px=(clientX-box.left)*(chart.W/box.width);
+  return Math.min(100,Math.max(0,Math.floor((px-chart.m.left)/chart.step)));
+}
+
 function startDrag(e,g,handle){
   e.preventDefault();
+  // Capture keeps the drag alive when the pointer leaves the line or the chart.
   handle.setPointerCapture(e.pointerId);
   handle.classList.add("dragging");
+  hideMarkTooltip();
+  // Grabbing the strip off-centre must not make the cutoff jump to the pointer.
+  const offset=boundaryAt(e.clientX)-cutoffs[g];
   const move=ev=>{
-    const box=hist.getBoundingClientRect();
-    const px=(ev.clientX-box.left)*(chart.W/box.width);
-    const mark=Math.round((px-chart.m.left)/chart.step);
+    const mark=boundaryAt(ev.clientX)-offset;
     if(mark!==cutoffs[g]) setCutoff(g,mark);
   };
   const end=()=>{
