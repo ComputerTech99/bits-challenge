@@ -386,3 +386,23 @@ test("#22 Reset Range before a course is open does nothing and does not throw", 
   expect(errors).toEqual([]);
   expect(dialogs).toEqual([]);
 });
+
+test("#23 going back to the placeholder clears the grading view and disables export", async ({ page }) => {
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
+  await page.selectOption("#course", "");
+  await expect(page.locator("#download")).toBeDisabled();
+  await expect(page.locator("#grades")).toBeEmpty();
+  await expect(page.locator("#gradeSummary")).toBeEmpty();
+  await expect(page.locator("#welcome")).toBeEmpty();
+});
+
+test("#23 the no-instructor alert does not leave the previous course on screen", async ({ page }) => {
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
+  await page.fill("#instructor", "");
+  page.on("dialog", d => d.accept());
+  await page.selectOption("#course", "MATH F112");
+  await expect(page.locator("#course")).toHaveValue("");
+  await expect(page.locator("#download")).toBeDisabled();
+  await expect(page.locator("#grades")).toBeEmpty();
+  await expect(stat(page, "Max")).toHaveText("—");
+});

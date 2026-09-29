@@ -440,9 +440,15 @@ file.onchange=e=>{
 };
 
 course.onchange=()=>{
+  // Keep the grading view in step with the dropdown: no course, no grading UI.
+  if(!course.value){
+    resetGradingView();
+    return;
+  }
   if(!instructor.value.trim()){
     alert("Please enter instructor name first");
     course.value="";
+    resetGradingView();
     return;
   }
   welcome.innerText=`Welcome ${instructor.value.toUpperCase()}. Please review and finalize grading.`;
