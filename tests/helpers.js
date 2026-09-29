@@ -25,7 +25,7 @@ async function upload(page, name) {
 async function startGrading(page, name, course, instructor = "Dr Rao") {
   await page.fill("#instructor", instructor);
   await upload(page, name);
-  await page.locator(`#course option[value="${course}"]`).first().waitFor({ state: "attached" });
+  await page.waitForFunction(c => [...document.querySelectorAll("#course option")].some(o => o.value === c), course);
   await page.selectOption("#course", course);
 }
 

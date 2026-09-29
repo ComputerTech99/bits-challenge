@@ -259,3 +259,25 @@ test("#13 stats show — instead of undefined/NaN when there is no data", async 
     await expect(stat(page, label)).toHaveText("—");
   }
 });
+
+test("#14 CSV fields are escaped per RFC 4180 and the file is named by course and date", async ({ page }) => {
+  await page.clock.setFixedTime(new Date(2026, 2, 5, 10, 0, 0)); // 5 March 2026, local time
+  await startGrading(page, "comma_names.xlsx", "Data Structures, Algorithms", 'Dr Rao, "KR"');
+  const { filename, text } = await download(page);
+  expect(filename).toBe("grades_Data_Structures_Algorithms_2026-03-05.csv");
+  expect(text).toBe(
+    'Instructor,"Dr Rao, ""KR"""\n' +
+    'Course,"Data Structures, Algorithms"\n' +
+    "\n" +
+    "BITS ID,Total Marks,Grade\n" +
+    "2023A7PS0001P,81,A\n" +
+    "2023A7PS0002P,42,C\n"
+  );
+});
+
+test("#14 quotes in a course name are doubled", async ({ page }) => {
+  await startGrading(page, "comma_names.xlsx", 'Intro to "C"');
+  const { filename, text } = await download(page);
+  expect(text).toContain('Course,"Intro to ""C"""\n');
+  expect(filename).toMatch(/^grades_Intro_to_C_\d{4}-\d{2}-\d{2}\.csv$/);
+});

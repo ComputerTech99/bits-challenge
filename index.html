@@ -643,6 +643,22 @@ function computeGradeSummary(){
   });
 }
 
+// RFC 4180: quote a field containing a comma, quote or line break, and
+// double any quotes inside it.
+function csvField(value){
+  const s=String(value);
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+}
+
+// grades_<course>_<YYYY-MM-DD>.csv, with the course reduced to filename-safe
+// characters ("Data Structures, Algorithms" -> "Data_Structures_Algorithms").
+function csvFileName(courseName){
+  const safe=String(courseName).replace(/[^A-Za-z0-9-]+/g,"_").replace(/^_+|_+$/g,"");
+  const d=new Date();
+  const date=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  return `grades_${safe}_${date}.csv`;
+}
+
 download.onclick=()=>{
   finalizeCount++;
   clearInterval(timerInterval);
@@ -652,13 +668,13 @@ download.onclick=()=>{
   const minT=Math.floor(elapsed/60000);
   const secT=Math.floor((elapsed%60000)/1000);
 
-  let csv=`Instructor,${instructor.value}\nCourse, ${course.value}\n\nBITS ID,Total Marks,Grade\n`;
+  let csv=`Instructor,${csvField(instructor.value)}\nCourse,${csvField(course.value)}\n\nBITS ID,Total Marks,Grade\n`;
   data.filter(d=>d.Course===course.value).forEach(d=>{
     for(const g of GRADES){
       const mi=+document.getElementById(g+"min").value;
       const ma=+document.getElementById(g+"max").value;
       if(d["Total Marks"]>=mi && d["Total Marks"]<=ma){
-        csv+=`${d["BITS ID"]},${d["Total Marks"]},${g}\n`;
+        csv+=`${csvField(d["BITS ID"])},${d["Total Marks"]},${g}\n`;
         break;
       }
     }
@@ -666,7 +682,7 @@ download.onclick=()=>{
 
   const a=document.createElement("a");
   a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
-  a.download="grades.csv";
+  a.download=csvFileName(course.value);
   a.click();
 
   if(finalizeCount === 1){
