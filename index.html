@@ -375,13 +375,34 @@ function parseMarksSheet(sheet){
       `Expected headers: BITS ID, Course, Total Marks.`], rows:[]};
   }
 
-  const rows=table.slice(1)
-    .filter(r=>r.some(v=>String(v).trim()!=="")) // skip fully blank lines
-    .map(r=>({
-      "BITS ID":r[col["BITS ID"]],
-      "Course":r[col["Course"]],
-      "Total Marks":r[col["Total Marks"]]
-    }));
+  // table[i] is on spreadsheet row firstRow+i (1-based, as Excel shows it).
+  const firstRow=XLSX.utils.decode_range(sheet["!ref"]).s.r+1;
+  const rows=[], errors=[];
+  table.forEach((r,i)=>{
+    if(i===0) return; // header row
+    if(!r.some(v=>String(v).trim()!=="")) return; // skip fully blank lines
+    const rowNo=firstRow+i;
+    const id=r[col["BITS ID"]], courseName=r[col["Course"]], raw=r[col["Total Marks"]];
+
+    if(String(id).trim()==="") errors.push(`Row ${rowNo}: BITS ID missing`);
+    if(String(courseName).trim()==="") errors.push(`Row ${rowNo}: course missing`);
+
+    // Numbers stay as-is; text such as " 85 " is accepted if it is numeric.
+    const marks=typeof raw==="number" ? raw : Number(String(raw).trim());
+    if(String(raw).trim()==="") errors.push(`Row ${rowNo}: marks missing`);
+    else if(!Number.isFinite(marks)) errors.push(`Row ${rowNo}: marks "${raw}" is not a number`);
+    else if(marks<0 || marks>100) errors.push(`Row ${rowNo}: marks ${raw} is outside 0–100`);
+
+    rows.push({"BITS ID":id, "Course":courseName, "Total Marks":marks});
+  });
+
+  if(!errors.length && !rows.length) errors.push("The file has no student rows.");
+  if(errors.length){
+    const MAX_SHOWN=20;
+    const shown=errors.slice(0,MAX_SHOWN);
+    if(errors.length>MAX_SHOWN) shown.push(`…and ${errors.length-MAX_SHOWN} more.`);
+    return {errors:["Upload rejected. Please correct the file and upload it again:",...shown], rows:[]};
+  }
   return {errors:[], rows};
 }
 

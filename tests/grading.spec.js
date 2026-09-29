@@ -71,3 +71,31 @@ test("#5 a missing required column is reported inline", async ({ page }) => {
   await expect(page.locator("#uploadError")).toContainText("Total Marks");
   expect(await courseOptions(page)).toEqual([""]);
 });
+
+test("#6 invalid rows reject the upload with row-level errors", async ({ page }) => {
+  await upload(page, "bad_data.xlsx");
+  const err = page.locator("#uploadError");
+  await expect(err).toContainText("Row 3: marks missing");
+  await expect(err).toContainText('Row 4: marks "abc" is not a number');
+  await expect(err).toContainText("Row 5: marks -5 is outside 0–100");
+  await expect(err).toContainText("Row 6: marks 104 is outside 0–100");
+  await expect(err).toContainText("Row 7: course missing");
+  await expect(err).toContainText("Row 8: BITS ID missing");
+  await expect(err).not.toContainText("Row 2:");
+  await expect(err).not.toContainText("Row 9:");
+  expect(await courseOptions(page)).toEqual([""]);
+});
+
+test("#6 a file with headers but no students is rejected", async ({ page }) => {
+  await upload(page, "empty.xlsx");
+  await expect(page.locator("#uploadError")).toContainText("no student rows");
+  expect(await courseOptions(page)).toEqual([""]);
+});
+
+test("#6 a valid upload after a rejected one clears the error", async ({ page }) => {
+  await upload(page, "bad_data.xlsx");
+  await expect(page.locator("#uploadError")).not.toBeEmpty();
+  await upload(page, "valid_basic.xlsx");
+  await expect(page.locator("#course option")).toHaveCount(3);
+  await expect(page.locator("#uploadError")).toBeEmpty();
+});
