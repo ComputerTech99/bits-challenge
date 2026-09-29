@@ -553,3 +553,15 @@ test("#28 the same BITS ID in different courses is accepted", async ({ page }) =
   const { text } = await download(page);
   expect(text).toContain("2023A7PS0001P,82,A\n");
 });
+
+test("#29 formula-like values are neutralised in the CSV", async ({ page }) => {
+  await startGrading(page, "valid_basic.xlsx", "CS F211", "=1+1");
+  const { text } = await download(page);
+  expect(text.split("\n")[0]).toBe("Instructor,'=1+1");
+});
+
+test("#29 csvField prefixes every formula trigger and still quotes per RFC 4180", async ({ page }) => {
+  const out = await page.evaluate(() =>
+    ["=1+1", "+1", "-1", "@SUM(A1)", "\tx", "\rx", "=1,2", "a=b", "Dr Rao"].map(csvField));
+  expect(out).toEqual(["'=1+1", "'+1", "'-1", "'@SUM(A1)", "'\tx", "\"'\rx\"", "\"'=1,2\"", "a=b", "Dr Rao"]);
+});

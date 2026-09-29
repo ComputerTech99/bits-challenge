@@ -694,9 +694,11 @@ function computeGradeSummary(){
 }
 
 // RFC 4180: quote a field containing a comma, quote or line break, and
-// double any quotes inside it.
+// double any quotes inside it. Values starting with = + - @ tab or CR would
+// run as formulas in Excel, so they get a leading ' first (OWASP guidance).
 function csvField(value){
-  const s=String(value);
+  let s=String(value);
+  if(/^[=+\-@\t\r]/.test(s)) s="'"+s;
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
 }
 
