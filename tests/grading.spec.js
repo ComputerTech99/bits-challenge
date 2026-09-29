@@ -205,7 +205,7 @@ async function purpleRows(page) {
 async function curvePoints(page, marks, pxPerStudent = 1) {
   return page.evaluate(([marks, pxPerStudent]) => {
     const pts = [];
-    const ctx = { beginPath() {}, stroke() {}, moveTo: (x, y) => pts.push([x, y]), lineTo: (x, y) => pts.push([x, y]) };
+    const ctx = { beginPath() {}, stroke() {}, setLineDash() {}, moveTo: (x, y) => pts.push([x, y]), lineTo: (x, y) => pts.push([x, y]) };
     drawBellCurve(ctx, marks, 1, pxPerStudent);
     return pts;
   }, [marks, pxPerStudent]);
@@ -659,4 +659,26 @@ test("setup: collapses to a summary once a course is open, and Edit expands it",
   await expect(page.locator("#instructor")).toBeVisible();
   await expect(page.locator("#instructor")).toBeFocused();
   await expect(page.locator("#instructor")).toHaveValue("Dr Rao"); // kept as typed
+});
+
+test("empty state says what to do next, before and after a file is loaded", async ({ page }) => {
+  await expect(page.locator("#emptyState")).toBeVisible();
+  await expect(page.locator("#emptyText")).toContainText("upload a marks file");
+  await expect(page.locator(".workspace")).toBeHidden();
+  await upload(page, "demo_marks.xlsx");
+  await expect(page.locator("#emptyText")).toHaveText("Choose a course to see its mark distribution and set its grade cutoffs.");
+  await page.fill("#instructor", "Dr Rao");
+  await page.selectOption("#course", "Linear Algebra");
+  await expect(page.locator("#emptyState")).toBeHidden();
+  await expect(page.locator(".workspace")).toBeVisible();
+});
+
+test("app bar shows instructor, course, class size and timer only once grading starts", async ({ page }) => {
+  await expect(page.locator("#appContext")).toBeHidden();
+  await startGrading(page, "demo_marks.xlsx", "Introduction to Programming");
+  await expect(page.locator("#appContext")).toBeVisible();
+  await expect(page.locator("#ctxInstructor")).toHaveText("Dr Rao");
+  await expect(page.locator("#ctxCourse")).toHaveText("Introduction to Programming");
+  await expect(page.locator("#ctxCount")).toHaveText("64");
+  await expect(page.locator("#timerText")).toBeVisible();
 });

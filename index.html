@@ -233,10 +233,22 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .error{
   color:var(--danger);
   font-size:14px;
+  padding:8px 12px;
+  border:1px solid #f1c4bf;
+  border-radius:var(--radius-control);
+  background:#fef3f2;
 }
 .error:empty{display:none}
 .notice{font-size:14px;color:var(--ink)}
 .notice:empty{display:none}
+
+/* ===== EMPTY STATE / GRADING MODE ===== */
+/* body.grading is set while a course is open. */
+body:not(.grading) .workspace,
+body:not(.grading) .appbar-context{display:none}
+body.grading .empty-state{display:none}
+.empty-state{padding:32px 24px}
+.empty-state p{margin:8px 0 0;max-width:60ch;color:var(--ink-muted)}
 
 /* ===== ACTION BAR ===== */
 .actionbar{
@@ -294,7 +306,10 @@ button:disabled{opacity:.45;cursor:not-allowed}
     <div class="appbar-sub">Grading console</div>
   </div>
   <div class="appbar-context" id="appContext">
-    <span>Grading time <b id="timerText">00:00</b></span>
+    <span><b id="ctxInstructor"></b></span>
+    <span><b id="ctxCourse"></b></span>
+    <span><b id="ctxCount"></b> students</span>
+    <span>Time <b id="timerText">00:00</b></span>
   </div>
 </header>
 
@@ -334,6 +349,11 @@ button:disabled{opacity:.45;cursor:not-allowed}
 </section>
 
 <div id="welcome" class="notice"></div>
+
+<section class="panel empty-state" id="emptyState" aria-live="polite">
+  <h2>No course open yet</h2>
+  <p id="emptyText"></p>
+</section>
 
 <div class="workspace">
   <section class="panel" aria-labelledby="analysisHeading">
@@ -419,8 +439,16 @@ let data=[];
 let previousSummary={};
 let finalizeCount = 0;
 
+// What the empty analysis area tells the user to do next.
+function updateEmptyState(){
+  emptyText.textContent=data.length
+    ? "Choose a course to see its mark distribution and set its grade cutoffs."
+    : "Enter your name and upload a marks file. The mark distribution and grade cutoffs for the course you choose will appear here.";
+}
+
 // Clear everything derived from the previous upload / course selection.
 function resetGradingView(){
+  document.body.classList.remove("grading");
   grades.innerHTML="";
   rangeError.innerText="";
   gradeSummary.innerHTML="";
@@ -436,6 +464,7 @@ function resetGradingView(){
   finalizeCount=0;
   thankyou.innerText="";
   exportError.innerText="";
+  updateEmptyState();
 }
 
 // Accepted spellings for each required column (compared trimmed, lower-case).
@@ -555,6 +584,7 @@ function loadFile(f){
     courses.forEach(c=>{
       course.add(new Option(c,c));
     });
+    updateEmptyState();
     showFileStatus(f.name,
       `${data.length} students in ${courses.length} ${courses.length===1?"course":"courses"}. Choose or drop another file to replace it.`);
   };
@@ -597,6 +627,10 @@ course.onchange=()=>{
   courseError.innerText="";
   welcome.innerText=`Welcome, ${instructor.value.trim()}. Review the cutoffs, then finalize the grades.`;
   collapseSetup();
+  ctxInstructor.textContent=instructor.value.trim();
+  ctxCourse.textContent=course.value;
+  ctxCount.textContent=data.filter(d=>d.Course===course.value).length;
+  document.body.classList.add("grading");
   startTimer();
   previousSummary={}; // a new course is not a change to pulse about
   buildGradeUI();
@@ -754,8 +788,9 @@ function drawBellCurve(ctx, marks, progress, pxPerStudent){
   const mean=marks.reduce((a,b)=>a+b,0)/n;
   const std=Math.sqrt(marks.reduce((a,b)=>a+(b-mean)**2,0)/n);
   if(std===0) return; // all marks identical: the curve is undefined
-  ctx.strokeStyle="#dc2626";
-  ctx.lineWidth=2;
+  ctx.strokeStyle="#5f5b78"; // --ink-muted
+  ctx.lineWidth=1.5;
+  ctx.setLineDash([6,4]);
   ctx.beginPath();
   const maxX=Math.floor(100*progress);
   for(let x=0;x<=maxX;x++){
@@ -833,6 +868,8 @@ function ordinal(n){
   if(last===3) return n+"rd";
   return n+"th";
 }
+
+updateEmptyState();
 
 instructor.oninput=()=>{ exportError.innerText=""; courseError.innerText=""; };
 

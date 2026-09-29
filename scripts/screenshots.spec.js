@@ -10,6 +10,11 @@ const DEMO = "demo_marks.xlsx", COURSE = "Introduction to Programming";
 
 const STATES = {
   empty: async () => {},
+  "upload-error": async page => {
+    await page.fill("#instructor", "Dr Rao");
+    await page.locator("#file").setInputFiles(require("../tests/helpers").fixture("bad_data.xlsx"));
+    await page.locator("#uploadError").waitFor();
+  },
   loaded: async page => { await startGrading(page, DEMO, COURSE); await page.waitForTimeout(700); },
 };
 const ONLY = process.env.SHOTS_STATES ? process.env.SHOTS_STATES.split(",") : Object.keys(STATES);
