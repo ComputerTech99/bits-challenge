@@ -2,7 +2,7 @@
 // app yet are skipped via the `ready` check.
 const path = require("path");
 const { test } = require("@playwright/test");
-const { openApp, startGrading, typeCutoff } = require("../tests/helpers");
+const { openApp, startGrading, typeCutoff, download } = require("../tests/helpers");
 
 const OUT = process.env.SHOTS_OUT || "docs/screenshots/after";
 const WIDTHS = (process.env.SHOTS_WIDTHS || "1440,1024,390").split(",").map(Number);
@@ -21,6 +21,19 @@ const STATES = {
     await page.selectOption("#borderN", "3");
     await page.waitForTimeout(700);
     await page.locator('.bl-group[data-grade="A"] li').first().hover();
+  },
+  dialog: async page => {
+    await startGrading(page, DEMO, COURSE);
+    await typeCutoff(page, "A", 78);
+    await page.waitForTimeout(700);
+    await page.click("#reviewBtn");
+    await page.waitForTimeout(300);
+  },
+  downloaded: async page => {
+    await startGrading(page, DEMO, COURSE);
+    await typeCutoff(page, "A", 78);
+    await page.waitForTimeout(700);
+    await download(page);
   },
   "cutoff-moved": async page => {
     await startGrading(page, DEMO, COURSE);

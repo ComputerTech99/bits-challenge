@@ -306,6 +306,35 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .change-count{font-size:14px;color:var(--ink-muted)}
 .change-count b{color:var(--ink);font-weight:600}
 
+/* ===== REVIEW DIALOG (the only shadow in the app) ===== */
+dialog{
+  width:min(560px, calc(100vw - 32px));
+  max-height:calc(100vh - 32px);
+  padding:24px;
+  border:1px solid var(--rule);
+  border-radius:var(--radius-panel);
+  color:var(--ink);
+  box-shadow:0 24px 48px rgba(28,26,51,.24);
+}
+dialog::backdrop{background:rgba(28,26,51,.4)}
+dialog[open]{animation:dialog-in .18s ease-out}
+@keyframes dialog-in{from{opacity:0;transform:translateY(8px)}}
+dialog h2{font-size:20px;margin-bottom:16px}
+dialog h2:focus{outline:none}
+dialog h3{font-size:14px;color:var(--ink);margin:16px 0 4px}
+.review-meta{display:grid;grid-template-columns:repeat(3,auto);gap:8px 24px;margin:0 0 16px}
+.review-meta dt{font-size:12px;color:var(--ink-muted)}
+.review-meta dd{margin:0;font-weight:600}
+.review-list{margin:0;padding-left:20px}
+.review-info{margin:12px 0 0;color:var(--ink-muted)}
+.review-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-top:24px}
+@media (max-width:480px){
+  .review-meta{grid-template-columns:1fr}
+  /* Stack full-width, primary on top, so labels never wrap inside a button. */
+  .review-actions{flex-direction:column-reverse}
+  .review-actions button{width:100%}
+}
+
 .visually-hidden{
   position:absolute!important;
   width:1px;height:1px;
@@ -487,6 +516,27 @@ body.grading .empty-state{display:none}
 
 </main>
 
+<!-- Review before export (E4). Native <dialog>: modal, Esc closes it. -->
+<dialog id="reviewDialog" aria-labelledby="reviewHeading">
+  <h2 id="reviewHeading" tabindex="-1">Review grades before download</h2>
+  <dl class="review-meta">
+    <div><dt>Course</dt><dd id="rvCourse"></dd></div>
+    <div><dt>Instructor</dt><dd id="rvInstructor"></dd></div>
+    <div><dt>Students</dt><dd id="rvCount" class="num"></dd></div>
+  </dl>
+  <table class="dist">
+    <thead><tr><th scope="col">Grade</th><th scope="col">Range</th><th scope="col" class="n">Students</th><th scope="col" class="n">Share</th></tr></thead>
+    <tbody id="rvTable"></tbody>
+  </table>
+  <h3>Cutoffs changed from default</h3>
+  <ul id="rvChanges" class="review-list"></ul>
+  <p id="rvBorderline" class="review-info"></p>
+  <div class="review-actions">
+    <button type="button" class="secondary" id="reviewBack">Back to grading</button>
+    <button type="button" id="download">Download grades (CSV)</button>
+  </div>
+</dialog>
+
 <!-- Screen-reader announcements of grade-count changes. -->
 <div id="liveRegion" class="visually-hidden" aria-live="polite"></div>
 
@@ -499,7 +549,7 @@ body.grading .empty-state{display:none}
     </div>
     <div class="actions">
       <button class="secondary" id="resetRanges" disabled>Reset cutoffs</button>
-      <button id="download" disabled>Finalize & Download</button>
+      <button id="reviewBtn" disabled>Review grades</button>
     </div>
   </div>
 </div>
@@ -604,7 +654,7 @@ function resetGradingView(){
   setup.classList.remove("collapsed"); // no course open: show the full setup
   ["min","max","avg","med","std"].forEach(id=>document.getElementById(id).textContent="—");
   clearChart();
-  download.disabled=true;
+  reviewBtn.disabled=true;
   // Timer, attempt count and messages belong to one course.
   resetTimer();
   finalizeCount=0;
@@ -781,7 +831,7 @@ course.onchange=()=>{
   cutoffs={...DEFAULT_CUTOFFS}; // each course starts from the defaults
   previousCounts=null;           // opening a course is not a change to announce
   buildCutoffEditor();
-  download.disabled=false;       // the editor cannot produce invalid ranges
+  reviewBtn.disabled=false;      // the editor cannot produce invalid ranges
   focusMark=null;
   render();
   buildChart(true);
@@ -867,8 +917,8 @@ function announceCounts(counts){
   previousCounts=counts;
 }
 
-function renderDistribution(counts,total){
-  gradeSummary.innerHTML="";
+function renderDistribution(counts,total,tbody=gradeSummary){
+  tbody.innerHTML="";
   GRADES.forEach(g=>{
     const [from,to]=bandRange(g);
     const share=total ? (100*counts[g]/total).toFixed(1)+"%" : "—";
@@ -876,7 +926,7 @@ function renderDistribution(counts,total){
     tr.dataset.grade=g;
     tr.innerHTML=`<th scope="row"><span class="chip ${gradeClass(g)}">${g}</span></th>
       <td class="num">${from}–${to}</td><td class="n num"><b>${counts[g]}</b></td><td class="n num">${share}</td>`;
-    gradeSummary.appendChild(tr);
+    tbody.appendChild(tr);
   });
 }
 
@@ -1263,15 +1313,44 @@ function ordinal(n){
 
 updateEmptyState();
 
-instructor.oninput=()=>{ exportError.innerText=""; courseError.innerText=""; };
+// ===== REVIEW BEFORE EXPORT (E4) =====
+function changedCutoffs(){
+  return CUTOFF_GRADES.filter(g=>cutoffs[g]!==DEFAULT_CUTOFFS[g])
+    .map(g=>`${g}: ${DEFAULT_CUTOFFS[g]} to ${cutoffs[g]}`);
+}
 
-download.onclick=()=>{
-  // The name may have been cleared after the course was selected.
+reviewBtn.onclick=()=>{
+  // The name may have been cleared after the course was opened (#15).
   if(!instructor.value.trim()){
-    exportError.innerText="Please enter the instructor name before downloading.";
+    exportError.innerText="Enter the instructor name before reviewing the grades.";
     return;
   }
   exportError.innerText="";
+  const rows=courseRows();
+  rvCourse.textContent=course.value;
+  rvInstructor.textContent=instructor.value.trim();
+  rvCount.textContent=rows.length;
+  renderDistribution(countGrades(rows),rows.length,rvTable);
+  rvChanges.innerHTML="";
+  const changes=changedCutoffs();
+  (changes.length ? changes : ["None. All cutoffs are at their defaults."]).forEach(t=>{
+    const li=document.createElement("li"); li.textContent=t; rvChanges.appendChild(li);
+  });
+  // Information, not a blocker: how many students still sit just below a cutoff.
+  const N=Number(borderN.value);
+  const near=borderlineGroups(rows,N).reduce((k,grp)=>k+grp.students.length,0);
+  rvBorderline.textContent=near
+    ? `${near} ${near===1?"student is":"students are"} within ${N} ${N===1?"mark":"marks"} below a cutoff. You can still adjust the cutoffs before downloading.`
+    : `No students are within ${N} ${N===1?"mark":"marks"} below a cutoff.`;
+  reviewDialog.showModal();
+  reviewHeading.focus();
+};
+reviewBack.onclick=()=>reviewDialog.close();
+
+instructor.oninput=()=>{ exportError.innerText=""; courseError.innerText=""; };
+
+// Reached only through the review dialog, which has already checked the name.
+download.onclick=()=>{
   finalizeCount++;
   clearInterval(timerInterval);
   renderTimer(); // freeze the clock on the same time the message reports
@@ -1295,6 +1374,7 @@ download.onclick=()=>{
   // click() can cancel it in some browsers, so wait (as FileSaver.js does).
   const url=a.href;
   setTimeout(()=>URL.revokeObjectURL(url),40000);
+  reviewDialog.close();
 
   if(finalizeCount === 1){
     thankyou.innerText =

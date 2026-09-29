@@ -8,6 +8,7 @@ the end of a trimester:
 | E1 | "How do I set cutoffs without breaking the ranges?" | A cutoff editor that can't produce invalid ranges |
 | E2 | "Where do my cutoffs fall on this class's distribution?" | The histogram becomes the control surface |
 | E3 | "Which students does moving a cutoff by one mark actually affect?" | Borderline students |
+| E4 | "Am I sure about what I'm about to submit?" | Review before export |
 
 All grade calculations go through one function, `gradeFor(mark)`. The counts, the
 distribution table, the chart, the borderline list and the CSV export can't
@@ -173,6 +174,54 @@ It also turns the answer into a single, bounded, reversible action.
 
 ---
 
+## E4: Review before export
+
+**Problem.** "Finalize & Download" committed every student's grade with one
+blind click. The instructor never saw a final summary of what they were about to
+submit: how many students got each grade, which cutoffs they had moved from the
+defaults, or whether anyone was still sitting one mark below a boundary.
+
+**Solution.**
+- **Review first:** the action bar's primary button is now "Review grades". It
+  opens a native `<dialog>` (`showModal()`), so it is modal, Esc closes it, and
+  focus returns to the button afterwards. It is the only element in the app with
+  a shadow.
+- **What the dialog shows:**
+  - course, instructor and student count;
+  - each grade's range, count and share;
+  - every cutoff changed from its default ("A: 80 to 78"), or "None. All cutoffs
+    are at their defaults.";
+  - the number of borderline students still just below a cutoff, stated as
+    information ("You can still adjust the cutoffs before downloading"), not as
+    a blocker.
+- **Download:** "Download grades (CSV)" runs the unchanged Stage 1 export (same
+  header block, columns, labels, BOM, formula guard and filename). It then closes
+  the dialog and shows the per-course completion message.
+- **Going back:** "Back to grading" closes the dialog and changes nothing.
+- **Name check:** the instructor-name check from #15 now happens when the dialog
+  is opened, with the same inline message style.
+
+**Why this beats the obvious alternative.** The obvious alternative is a
+`confirm("Download grades?")` box. That adds a click but no information, and
+people learn to dismiss it without reading. The review shows the few facts that
+actually change the decision: the distribution, what was changed, and who is
+still on a boundary. It doesn't block the download on any of them.
+
+**How it was tested.**
+- `E4:` tests check that the dialog's course, instructor, count, per-grade table
+  (equal to the side panel), changed-cutoff list and borderline count match the
+  live state, and that the no-changes case is handled.
+- Esc and "Back to grading" each close the dialog with the cutoffs, counts and
+  completion message untouched, no download, and focus back on "Review grades".
+  The next download still counts as the first attempt.
+- A download closes the dialog, and a second download says "second attempt" with
+  identical bytes.
+- **Byte-identity:** all four golden CSVs (three courses with default cutoffs,
+  plus A 78 / B- 52) are now downloaded through the dialog and still match the
+  Stage 1 exports byte for byte.
+
+---
+
 ## Stage 1 tests rewritten in Stage 2
 
 When a Stage 2 change legitimately made a Stage 1 test obsolete, the test was
@@ -195,3 +244,8 @@ rewritten to check the same guarantee through the new UI. None was deleted.
 | #2 (canvas blank after re-upload) | E2 replaced the canvas with SVG. | The SVG chart is empty after a re-upload. |
 | #12 ×6 (canvas histogram) | E2: SVG, one bar per mark. | Bars stay inside the plot and use the space. The x-axis is labelled every 10 (it was "0–9 … 90–100" bins). The curve passes through the bar centres and equals n × pdf for 1-mark bins (it was n × 10 × pdf for 10-mark bins). No curve and no NaN when std = 0. A re-upload during the opening animation leaves no stale chart. |
 | #26 ×2 (clustered curve) | E2 | The curve's highest point stays inside the plot area (read from the SVG path instead of recorded canvas calls). |
+| `download()` helper (used by most CSV tests) | E4: downloads go through the review dialog. | Opens the dialog and clicks "Download grades (CSV)". Every CSV assertion is unchanged. |
+| #2, #8, #9, #23 ×2, happy path (Download enabled/disabled) | E4: the gate is now "Review grades". Left on `#download`, these would have passed vacuously, because that button now lives in a closed dialog. | The same enabled/disabled guarantees on `#reviewBtn`. |
+| #15 (export blocked without a name) | E4 | The block happens when opening the review: inline message, no dialog, no download. |
+| #18 (ordinals) | E4 | 23 finalizes through the dialog. |
+| #27b (blocked export clears on re-upload) | E4 | The blocked attempt clicks "Review grades". |

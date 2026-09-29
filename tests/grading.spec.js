@@ -1,7 +1,7 @@
 // Regression tests for the Stage 1 bug fixes. Test names reference the
 // row number in BUG_FIX_LOG.md.
 const { test, expect } = require("@playwright/test");
-const { openApp, upload, startGrading, stat, download, courseOptions, gradeCounts, setInstructor, cutoffInput, typeCutoff, rangeText } = require("./helpers");
+const { openApp, upload, startGrading, stat, download, courseOptions, gradeCounts, setInstructor, cutoffInput, typeCutoff, rangeText, finalize } = require("./helpers");
 
 const XLSX = require("xlsx");
 const { fixture } = require("./helpers");
@@ -35,7 +35,7 @@ test("#2 course list is deduplicated and fully reset on re-upload", async ({ pag
   await expect(page.locator("#grades")).toBeEmpty();
   await expect(page.locator("#gradeSummary")).toBeEmpty();
   await expect(page.locator("#welcome")).toBeEmpty();
-  await expect(page.locator("#download")).toBeDisabled();
+  await expect(page.locator("#reviewBtn")).toBeDisabled();
   for (const label of ["Min", "Max", "Avg", "Median"]) {
     await expect(stat(page, label)).toHaveText("—");
   }
@@ -125,7 +125,7 @@ test("#8 bands always cover 0–100: A ends at 100 even when a higher cutoff is 
   await typeCutoff(page, "A", 150);
   await expect(cutoffInput(page, "A")).toHaveValue("100");
   await expect(rangeText(page, "A")).toHaveText("A: 100–100");
-  await expect(page.locator("#download")).toBeEnabled();
+  await expect(page.locator("#reviewBtn")).toBeEnabled();
   const { text } = await download(page);
   expect(text.trim().split("\n").slice(4)).toHaveLength(20); // nobody dropped
 });
@@ -147,7 +147,7 @@ test("#9 a single-mark band (A = 100–100) is valid", async ({ page }) => {
   await expect(rangeText(page, "A")).toHaveText("A: 100–100");
   await expect(rangeText(page, "A-")).toHaveText("A-: 70–99");
   await expect(page.locator("#cutoffNote")).toBeEmpty(); // allowed, so no clamp note
-  await expect(page.locator("#download")).toBeEnabled();
+  await expect(page.locator("#reviewBtn")).toBeEnabled();
   const { text } = await download(page);
   expect(text).toContain("2023A7PS0006P,100,A\n");
   expect(text).toContain("2023A7PS0005P,80,A-\n");
@@ -314,12 +314,14 @@ test("#14 quotes in a course name are doubled", async ({ page }) => {
 });
 
 test("#15 export is blocked inline when the instructor name is empty", async ({ page }) => {
+  // Stage 2 (E4): the check happens when opening the review dialog.
   await startGrading(page, "valid_basic.xlsx", "CS F211");
   await setInstructor(page, "   ");
   let downloaded = false;
   page.on("download", () => { downloaded = true; });
-  await page.click("#download");
+  await page.click("#reviewBtn");
   await expect(page.locator("#exportError")).toContainText("instructor name");
+  await expect(page.locator("#reviewDialog")).not.toHaveAttribute("open", "");
   await page.waitForTimeout(300);
   expect(downloaded).toBe(false);
   await expect(page.locator("#thankyou")).toBeEmpty();
@@ -355,7 +357,7 @@ test("#18 attempt ordinals are correct (21st, 22nd, 23rd, 11th–13th)", async (
   const expected = { 1: "first", 2: "second", 3: "third", 4: "4th", 11: "11th", 12: "12th", 13: "13th", 21: "21st", 22: "22nd", 23: "23rd" };
   // Only the message matters here; Chromium throttles bursts of real downloads.
   for (let n = 1; n <= 23; n++) {
-    await page.click("#download");
+    await finalize(page); // Stage 2 (E4): through the review dialog
     if (expected[n]) await expect(page.locator("#thankyou")).toContainText(`in your ${expected[n]} attempt`);
   }
 });
@@ -417,7 +419,7 @@ test("#22 Reset cutoffs is inert before a course is open", async ({ page }) => {
 test("#23 going back to the placeholder clears the grading view and disables export", async ({ page }) => {
   await startGrading(page, "valid_basic.xlsx", "CS F211");
   await page.selectOption("#course", "");
-  await expect(page.locator("#download")).toBeDisabled();
+  await expect(page.locator("#reviewBtn")).toBeDisabled();
   await expect(page.locator("#grades")).toBeEmpty();
   await expect(page.locator("#gradeSummary")).toBeEmpty();
   await expect(page.locator("#welcome")).toBeEmpty();
@@ -431,7 +433,7 @@ test("#23 choosing a course without a name leaves no previous course on screen, 
   page.on("dialog", d => { dialogs.push(d.message()); d.accept(); });
   await page.selectOption("#course", "MATH F112");
   await expect(page.locator("#course")).toHaveValue("");
-  await expect(page.locator("#download")).toBeDisabled();
+  await expect(page.locator("#reviewBtn")).toBeDisabled();
   await expect(page.locator("#grades")).toBeEmpty();
   await expect(stat(page, "Max")).toHaveText("—");
   await expect(page.locator("#courseError")).toHaveText("Enter your name before choosing a course.");
@@ -469,7 +471,7 @@ test("happy path: upload, select course, adjust a cutoff, export the right grade
   // Stage 2: the name is shown as typed, not upper-cased.
   await expect(page.locator("#welcome")).toHaveText("Welcome, Dr Rao. Review the cutoffs, then finalize the grades.");
   await expect(page.locator("#grades input[type=number]")).toHaveCount(7);
-  await expect(page.locator("#download")).toBeEnabled();
+  await expect(page.locator("#reviewBtn")).toBeEnabled();
 
   // Raise the A cutoff to 85; A- now ends at 84.
   await typeCutoff(page, "A", 85);
@@ -527,7 +529,7 @@ test("#27 a new upload resets the timer, attempt count and both messages", async
   await page.clock.fastForward(7_000);
   await download(page);
   await setInstructor(page, "");
-  await page.click("#download");
+  await page.click("#reviewBtn"); // Stage 2 (E4): blocked when opening the review
   await expect(page.locator("#exportError")).not.toBeEmpty();
   await expect(page.locator("#thankyou")).not.toBeEmpty();
 
@@ -913,4 +915,70 @@ test("E3: hovering a student highlights their bar", async ({ page }) => {
 test("E3: clear empty state when nobody is near a cutoff", async ({ page }) => {
   await startGrading(page, "identical_marks.xlsx", "CS F211"); // everyone has 65
   await expect(page.locator("#borderline")).toHaveText("No students are within 2 marks below any cutoff.");
+});
+
+// ===== E4: review before export =====
+
+async function dialogCounts(page) {
+  return page.locator("#rvTable tr").evaluateAll(rows =>
+    Object.fromEntries(rows.map(r => [r.dataset.grade, Number(r.querySelector("td b").textContent)])));
+}
+
+test("E4: the review dialog shows exactly the current state", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await typeCutoff(page, "A", 78);
+  await typeCutoff(page, "B-", 52);
+  await page.click("#reviewBtn");
+  const dialog = page.locator("#reviewDialog");
+  await expect(dialog).toBeVisible();
+  await expect(page.locator("#reviewHeading")).toBeFocused();
+  await expect(page.locator("#rvCourse")).toHaveText(INTRO);
+  await expect(page.locator("#rvInstructor")).toHaveText("Dr Rao");
+  await expect(page.locator("#rvCount")).toHaveText("64");
+  expect(await dialogCounts(page)).toEqual(await gradeCounts(page));
+  await expect(page.locator("#rvTable tr[data-grade='A'] td").first()).toHaveText("78–100");
+  expect(await page.locator("#rvChanges li").allTextContents()).toEqual(["A: 80 to 78", "B-: 50 to 52"]);
+  const near = await page.locator("#borderline li").count();
+  await expect(page.locator("#rvBorderline")).toHaveText(
+    `${near} students are within 2 marks below a cutoff. You can still adjust the cutoffs before downloading.`);
+});
+
+test("E4: with default cutoffs the dialog says nothing was changed", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await page.click("#reviewBtn");
+  expect(await page.locator("#rvChanges li").allTextContents()).toEqual(["None. All cutoffs are at their defaults."]);
+});
+
+for (const [how, close] of [
+  ["Esc", page => page.keyboard.press("Escape")],
+  ["Back to grading", page => page.getByRole("button", { name: "Back to grading" }).click()],
+]) {
+  test(`E4: ${how} closes the review and leaves everything as it was`, async ({ page }) => {
+    let downloaded = false;
+    page.on("download", () => { downloaded = true; });
+    await startGrading(page, "demo_marks.xlsx", INTRO);
+    await typeCutoff(page, "A", 78);
+    const before = await gradeCounts(page);
+    await page.click("#reviewBtn");
+    await expect(page.locator("#reviewDialog")).toBeVisible();
+    await close(page);
+    await expect(page.locator("#reviewDialog")).toBeHidden();
+    await expect(page.locator("#reviewBtn")).toBeFocused();       // focus returns
+    await expect(cutoffInput(page, "A")).toHaveValue("78");
+    expect(await gradeCounts(page)).toEqual(before);
+    await expect(page.locator("#thankyou")).toBeEmpty();
+    expect(downloaded).toBe(false);
+    await download(page);                                           // still the first attempt
+    await expect(page.locator("#thankyou")).toContainText("in your first attempt");
+  });
+}
+
+test("E4: Download grades closes the dialog and attempt counting continues", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  const first = await download(page);
+  await expect(page.locator("#reviewDialog")).toBeHidden();
+  await expect(page.locator("#thankyou")).toContainText("in your first attempt");
+  const second = await download(page);
+  await expect(page.locator("#thankyou")).toContainText("in your second attempt");
+  expect(second.bytes.equals(first.bytes)).toBe(true);
 });
