@@ -329,6 +329,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
       <select id="course"><option value="">Select a course</option></select>
     </div>
   </div>
+  <div id="courseError" class="error" role="alert"></div>
   <div id="uploadError" class="error" role="alert"></div>
 </section>
 
@@ -587,10 +588,13 @@ course.onchange=()=>{
   resetGradingView();
   if(!course.value) return;
   if(!instructor.value.trim()){
-    alert("Please enter instructor name first");
+    // Inline, never alert(): say what's missing and put the cursor there.
+    courseError.innerText="Enter your name before choosing a course.";
     course.value="";
+    instructor.focus();
     return;
   }
+  courseError.innerText="";
   welcome.innerText=`Welcome, ${instructor.value.trim()}. Review the cutoffs, then finalize the grades.`;
   collapseSetup();
   startTimer();
@@ -830,7 +834,7 @@ function ordinal(n){
   return n+"th";
 }
 
-instructor.oninput=()=>{ exportError.innerText=""; };
+instructor.oninput=()=>{ exportError.innerText=""; courseError.innerText=""; };
 
 download.onclick=()=>{
   // The name may have been cleared after the course was selected.

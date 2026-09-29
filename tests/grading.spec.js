@@ -410,15 +410,23 @@ test("#23 going back to the placeholder clears the grading view and disables exp
   await expect(page.locator("#welcome")).toBeEmpty();
 });
 
-test("#23 the no-instructor alert does not leave the previous course on screen", async ({ page }) => {
+test("#23 choosing a course without a name leaves no previous course on screen, and asks inline", async ({ page }) => {
+  // Stage 2: CLAUDE.md forbids alert(), so the prompt is inline (was an alert in Stage 1).
   await startGrading(page, "valid_basic.xlsx", "CS F211");
   await setInstructor(page, "");
-  page.on("dialog", d => d.accept());
+  const dialogs = [];
+  page.on("dialog", d => { dialogs.push(d.message()); d.accept(); });
   await page.selectOption("#course", "MATH F112");
   await expect(page.locator("#course")).toHaveValue("");
   await expect(page.locator("#download")).toBeDisabled();
   await expect(page.locator("#grades")).toBeEmpty();
   await expect(stat(page, "Max")).toHaveText("—");
+  await expect(page.locator("#courseError")).toHaveText("Enter your name before choosing a course.");
+  await expect(page.locator("#instructor")).toBeFocused();
+  expect(dialogs).toEqual([]);
+
+  await setInstructor(page, "Dr Rao"); // typing a name clears the message
+  await expect(page.locator("#courseError")).toBeEmpty();
 });
 
 test("#24 numeric course codes work and stray spaces don't split a course", async ({ page }) => {
