@@ -6,3 +6,9 @@ const { openApp, upload, startGrading, stat, download, courseOptions } = require
 test.beforeEach(async ({ page }) => {
   await openApp(page);
 });
+
+test("#1 Min and Max stats show the right values", async ({ page }) => {
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
+  await expect(stat(page, "Min")).toHaveText("0");
+  await expect(stat(page, "Max")).toHaveText("100");
+});
