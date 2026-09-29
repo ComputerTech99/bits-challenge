@@ -296,32 +296,32 @@ button.enabled{
 
 <script>
 /* ===== TIMER (LOCKED) ===== */
-const gradingStartTime = Date.now();
+let gradingStartTime=null; // set on the first course selection
 let timerInterval=null;
 const circumference = 2 * Math.PI * 40;
 
-function startTimer(){
+function renderTimer(){
   const arc=document.getElementById("timerArc");
   const text=document.getElementById("timerText");
 
-  timerInterval=setInterval(()=>{
-    const elapsed = Date.now() - gradingStartTime;
-    const min = Math.floor(elapsed/60000);
-    const sec = Math.floor((elapsed%60000)/1000);
+  const elapsed = Date.now() - gradingStartTime;
+  const min = Math.floor(elapsed/60000);
+  const sec = Math.floor((elapsed%60000)/1000);
 
-    text.innerText =
-      String(min).padStart(2,"0")+":"+String(sec).padStart(2,"0");
+  text.innerText =
+    String(min).padStart(2,"0")+":"+String(sec).padStart(2,"0");
 
-    const progress = Math.min(elapsed/3600000,1);
-    arc.style.strokeDashoffset =
-      circumference * (1-progress);
-  },1000);
+  const progress = Math.min(elapsed/3600000,1);
+  arc.style.strokeDashoffset =
+    circumference * (1-progress);
 }
 
-document.addEventListener("DOMContentLoaded",()=>{
-  // CodeForge challenge bug: timer display waits for the first interval tick.
-  startTimer();
-});
+function startTimer(){
+  if(gradingStartTime!==null) return; // already started: never run two intervals
+  gradingStartTime=Date.now();
+  renderTimer(); // show the start state now rather than after the first tick
+  timerInterval=setInterval(renderTimer,1000);
+}
 
 /* ===== EVERYTHING BELOW IS LOCKED (VERBATIM) ===== */
 
@@ -441,6 +441,7 @@ course.onchange=()=>{
     return;
   }
   welcome.innerText=`Welcome ${instructor.value.toUpperCase()}. Please review and finalize grading.`;
+  startTimer();
   buildGradeUI();
   updateAll();
 };
@@ -627,6 +628,7 @@ function computeGradeSummary(){
 download.onclick=()=>{
   finalizeCount++;
   clearInterval(timerInterval);
+  renderTimer(); // freeze the clock on the same time the message reports
 
   const elapsed = Date.now() - gradingStartTime;
   const minT=Math.floor(elapsed/60000);

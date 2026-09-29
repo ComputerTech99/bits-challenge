@@ -150,3 +150,30 @@ test("#10 changing a Min still moves the next-lower grade's Max", async ({ page 
   await expect(page.locator("#B-max")).toHaveValue("54");
   await expect(page.locator("#rangeError")).toBeEmpty();
 });
+
+test("#11 timer starts on the first course selection, not on page load", async ({ page }) => {
+  await page.clock.install();
+  await page.goto("/");
+  await page.clock.fastForward("05:00");
+  await expect(page.locator("#timerText")).toHaveText("00:00");
+
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
+  await expect(page.locator("#timerText")).toHaveText("00:00");
+  await page.clock.fastForward(65_000);
+  await expect(page.locator("#timerText")).toHaveText("01:05");
+});
+
+test("#11 timer is not restarted by a second course selection and stops on finalize", async ({ page }) => {
+  await page.clock.install();
+  await page.goto("/");
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
+  await page.clock.fastForward(10_000);
+  await page.selectOption("#course", "MATH F112");
+  await page.clock.fastForward(10_000);
+  await expect(page.locator("#timerText")).toHaveText("00:20");
+
+  await download(page);
+  const frozen = await page.locator("#timerText").textContent();
+  await page.clock.fastForward(30_000);
+  await expect(page.locator("#timerText")).toHaveText(frozen);
+});
