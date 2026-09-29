@@ -354,3 +354,17 @@ test("#19 dismissing the confirmation leaves the ranges alone", async ({ page })
   await page.click("#resetRanges");
   await expect(page.locator("#Amin")).toHaveValue("90");
 });
+
+test("#20 upload uses readAsArrayBuffer, not the deprecated readAsBinaryString", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__reads = [];
+    for (const m of ["readAsBinaryString", "readAsArrayBuffer"]) {
+      const orig = FileReader.prototype[m];
+      FileReader.prototype[m] = function (...a) { window.__reads.push(m); return orig.apply(this, a); };
+    }
+  });
+  await page.goto("/");
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
+  await expect(stat(page, "Max")).toHaveText("100");
+  expect(await page.evaluate(() => window.__reads)).toEqual(["readAsArrayBuffer"]);
+});

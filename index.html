@@ -424,7 +424,7 @@ file.onchange=e=>{
   uploadError.innerText="";
   const r=new FileReader();
   r.onload=ev=>{
-    const wb=XLSX.read(ev.target.result,{type:"binary"});
+    const wb=XLSX.read(ev.target.result,{type:"array"});
     const parsed=parseMarksSheet(wb.Sheets[wb.SheetNames[0]]);
     if(parsed.errors.length){
       uploadError.innerText=parsed.errors.join("\n");
@@ -436,7 +436,7 @@ file.onchange=e=>{
       course.add(new Option(c,c));
     });
   };
-  r.readAsBinaryString(f);
+  r.readAsArrayBuffer(f);
 };
 
 course.onchange=()=>{
