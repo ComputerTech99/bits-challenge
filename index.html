@@ -332,6 +332,9 @@ const DEFAULTS={
   "C":[40,49],"C-":[30,39],"D":[20,29],"E":[0,19]
 };
 
+// How long .lift / .pulse stay applied; matches their .25s CSS transitions.
+const HIGHLIGHT_MS=250;
+
 let data=[];
 let previousSummary={};
 let finalizeCount = 0;
@@ -481,14 +484,14 @@ function buildGradeUI(){
 
     minSel.onchange=()=>{
       card.classList.add("lift");
-      setTimeout(()=>card.classList.remove("lift"),30);
+      setTimeout(()=>card.classList.remove("lift"),HIGHLIGHT_MS);
       cascadeMaxFrom(idx);
       updateAll();
     };
 
     maxSel.onchange=()=>{
       card.classList.add("lift");
-      setTimeout(()=>card.classList.remove("lift"),30);
+      setTimeout(()=>card.classList.remove("lift"),HIGHLIGHT_MS);
       cascadeMinFrom(idx);
       updateAll();
     };
@@ -637,7 +640,7 @@ function computeGradeSummary(){
     span.textContent=`${g}: ${counts[g]}`;
     if(previousSummary[g]!==undefined && previousSummary[g]!==counts[g]){
       span.classList.add("pulse");
-      setTimeout(()=>span.classList.remove("pulse"),30);
+      setTimeout(()=>span.classList.remove("pulse"),HIGHLIGHT_MS);
     }
     gradeSummary.appendChild(span);
     previousSummary[g]=counts[g];

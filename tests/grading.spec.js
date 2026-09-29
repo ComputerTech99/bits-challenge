@@ -298,3 +298,16 @@ test("#15 export is blocked inline when the instructor name is empty", async ({ 
   const { text } = await download(page);
   expect(text).toMatch(/^Instructor,Dr Rao\n/);
 });
+
+test("#16 lift and pulse classes stay on for the 250ms transition", async ({ page }) => {
+  await page.clock.install();
+  await page.goto("/");
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
+  await page.selectOption("#Amin", "90"); // moves students from A to A-
+  await page.clock.runFor(100);
+  await expect(page.locator(".grade.lift")).toHaveCount(1);
+  await expect(page.locator(".grade-summary span.pulse")).not.toHaveCount(0);
+  await page.clock.runFor(200);
+  await expect(page.locator(".grade.lift")).toHaveCount(0);
+  await expect(page.locator(".grade-summary span.pulse")).toHaveCount(0);
+});
