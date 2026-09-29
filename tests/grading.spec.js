@@ -325,3 +325,13 @@ test("#17 switching course does not pulse the summary chips", async ({ page }) =
   expect(classes).toHaveLength(8);
   expect(classes.filter(c => c.includes("pulse"))).toEqual([]);
 });
+
+test("#18 attempt ordinals are correct (21st, 22nd, 23rd, 11th–13th)", async ({ page }) => {
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
+  const expected = { 1: "first", 2: "second", 3: "third", 4: "4th", 11: "11th", 12: "12th", 13: "13th", 21: "21st", 22: "22nd", 23: "23rd" };
+  // Only the message matters here; Chromium throttles bursts of real downloads.
+  for (let n = 1; n <= 23; n++) {
+    await page.click("#download");
+    if (expected[n]) await expect(page.locator("#thankyou")).toContainText(`in your ${expected[n]} attempt`);
+  }
+});
