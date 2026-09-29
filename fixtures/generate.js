@@ -118,6 +118,16 @@ write("missing_column.xlsx", [
   write("large_class.xlsx", rows);
 }
 
+// clustered_marks: std smaller than the 10-mark bin width, so the expected-count
+// curve peaks above the tallest bar (bell-curve overflow).
+{
+  const rows = [HEADERS];
+  let n = 1;
+  for (const m of [64, 65, 65, 65, 66, 64, 65, 66, 65, 65]) rows.push([id(n++), "CS F211", m]);
+  for (const m of [55, 58, 60, 62, 64, 66, 68, 70, 74, 77]) rows.push([id(n++), "MATH F112", m]);
+  write("clustered_marks.xlsx", rows);
+}
+
 // empty: header row only.
 write("empty.xlsx", [HEADERS]);
 

@@ -208,12 +208,20 @@ async function curvePoints(page, marks, pxPerStudent = 1) {
   }, [marks, pxPerStudent]);
 }
 
-test("#12 bars are scaled to the tallest bin and stay inside the canvas", async ({ page }) => {
+test("#12 bars are scaled to fit the chart and stay inside the canvas", async ({ page }) => {
   await startGrading(page, "large_class.xlsx", "CS F211");
   await page.waitForTimeout(600);
+  // Since #26 the shared scale is 180px per max(tallest bin, curve peak).
+  const marks = XLSX.utils.sheet_to_json(XLSX.readFile(fixture("large_class.xlsx")).Sheets.Marks).map(r => r["Total Marks"]);
+  const n = marks.length, mean = marks.reduce((a, b) => a + b) / n;
+  const std = Math.sqrt(marks.reduce((a, b) => a + (b - mean) ** 2, 0) / n);
+  const bins = Array(10).fill(0);
+  marks.forEach(m => bins[Math.min(9, Math.floor(m / 10))]++);
+  const tallest = Math.max(...bins);
+  const expectedTop = 210 - tallest * 180 / Math.max(tallest, n * 10 / (std * Math.sqrt(2 * Math.PI)));
   const rows = await purpleRows(page);
   expect(rows[0]).toBeGreaterThanOrEqual(25); // headroom above the tallest bar
-  expect(rows[0]).toBeLessThanOrEqual(35);    // ...but it does fill the chart
+  expect(Math.abs(rows[0] - expectedTop)).toBeLessThanOrEqual(2);
 });
 
 test("#12 bin labels are 0–9 … 90–100", async ({ page }) => {
@@ -463,3 +471,26 @@ test("happy path: upload, select course, adjust a range, export the right grades
   expect(lines.at(-1)).toBe("");
   await expect(page.locator("#thankyou")).toContainText("in your first attempt");
 });
+
+// Records the y of every point drawn on a path (only the bell curve uses paths).
+async function recordCurveYs(page) {
+  await page.addInitScript(() => {
+    window.__curveYs = [];
+    for (const m of ["moveTo", "lineTo"]) {
+      const orig = CanvasRenderingContext2D.prototype[m];
+      CanvasRenderingContext2D.prototype[m] = function (x, y) { window.__curveYs.push(y); return orig.call(this, x, y); };
+    }
+  });
+  await page.goto("/");
+}
+
+for (const course of ["CS F211", "MATH F112"]) {
+  test(`#26 bell curve stays inside the canvas for clustered marks (${course})`, async ({ page }) => {
+    await recordCurveYs(page);
+    await startGrading(page, "clustered_marks.xlsx", course);
+    await page.waitForTimeout(600);
+    const ys = await page.evaluate(() => window.__curveYs);
+    expect(ys.length).toBeGreaterThan(0);
+    expect(Math.min(...ys)).toBeGreaterThanOrEqual(0);
+  });
+}

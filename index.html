@@ -577,7 +577,14 @@ function drawHistogram(){
 
   let bins=Array(10).fill(0);
   marks.forEach(m=>bins[Math.min(9,Math.floor(m/10))]++);
-  const pxPerStudent=BAR_AREA/Math.max(...bins);
+  // Shared y-scale: fit whichever is taller, the tallest bar or the curve's peak.
+  // The curve peaks at n×10×pdf(mean) = n×10/(std×√2π), which exceeds the
+  // tallest bin when marks are clustered more tightly than the 10-mark bin width.
+  const n=marks.length;
+  const mean=marks.reduce((a,b)=>a+b,0)/n;
+  const std=Math.sqrt(marks.reduce((a,b)=>a+(b-mean)**2,0)/n);
+  const curvePeak=std>0 ? n*10/(std*Math.sqrt(2*Math.PI)) : 0;
+  const pxPerStudent=BAR_AREA/Math.max(...bins,curvePeak);
 
   let start=null;
   function animate(ts){
