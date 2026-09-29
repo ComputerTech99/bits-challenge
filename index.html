@@ -456,7 +456,6 @@ body.grading .empty-state{display:none}
   <div id="uploadError" class="error" role="alert"></div>
 </section>
 
-<div id="welcome" class="notice"></div>
 
 <section class="panel empty-state" id="emptyState" aria-live="polite">
   <h2>No course open yet</h2>
@@ -650,7 +649,6 @@ function resetGradingView(){
   liveRegion.textContent="";
   changeCount.textContent="";
   resetRanges.disabled=true;
-  welcome.innerText="";
   setup.classList.remove("collapsed"); // no course open: show the full setup
   ["min","max","avg","med","std"].forEach(id=>document.getElementById(id).textContent="—");
   clearChart();
@@ -821,7 +819,6 @@ course.onchange=()=>{
     return;
   }
   courseError.innerText="";
-  welcome.innerText=`Welcome, ${instructor.value.trim()}. Review the cutoffs, then finalize the grades.`;
   collapseSetup();
   ctxInstructor.textContent=instructor.value.trim();
   ctxCourse.textContent=course.value;

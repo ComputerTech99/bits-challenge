@@ -34,7 +34,7 @@ test("#2 course list is deduplicated and fully reset on re-upload", async ({ pag
   await expect(page.locator("#course")).toHaveValue("");
   await expect(page.locator("#grades")).toBeEmpty();
   await expect(page.locator("#gradeSummary")).toBeEmpty();
-  await expect(page.locator("#welcome")).toBeEmpty();
+  await expect(page.locator("#appContext")).toBeHidden(); // Stage 2: the welcome line was cut; no per-course context survives
   await expect(page.locator("#reviewBtn")).toBeDisabled();
   for (const label of ["Min", "Max", "Avg", "Median"]) {
     await expect(stat(page, label)).toHaveText("—");
@@ -422,7 +422,7 @@ test("#23 going back to the placeholder clears the grading view and disables exp
   await expect(page.locator("#reviewBtn")).toBeDisabled();
   await expect(page.locator("#grades")).toBeEmpty();
   await expect(page.locator("#gradeSummary")).toBeEmpty();
-  await expect(page.locator("#welcome")).toBeEmpty();
+  await expect(page.locator("#appContext")).toBeHidden(); // Stage 2: the welcome line was cut; no per-course context survives
 });
 
 test("#23 choosing a course without a name leaves no previous course on screen, and asks inline", async ({ page }) => {
@@ -468,8 +468,9 @@ test("#25 an unreadable file shows an inline error instead of throwing", async (
 
 test("happy path: upload, select course, adjust a cutoff, export the right grades", async ({ page }) => {
   await startGrading(page, "valid_basic.xlsx", "CS F211");
-  // Stage 2: the name is shown as typed, not upper-cased.
-  await expect(page.locator("#welcome")).toHaveText("Welcome, Dr Rao. Review the cutoffs, then finalize the grades.");
+  // Stage 2: the name is shown as typed, never upper-cased (the welcome line
+  // that used to show it was cut in the polish pass; the app bar shows it).
+  await expect(page.locator("#ctxInstructor")).toHaveText("Dr Rao");
   await expect(page.locator("#grades input[type=number]")).toHaveCount(7);
   await expect(page.locator("#reviewBtn")).toBeEnabled();
 
@@ -1057,3 +1058,16 @@ test("a11y: the whole flow works from the keyboard alone", async ({ page }) => {
   await expect(page.locator("#thankyou")).toContainText("first attempt");
   await expect(page.locator("#reviewBtn")).toBeFocused();
 });
+
+for (const width of [360, 1600]) {
+  test(`layout: no horizontal scrolling at ${width}px (empty, grading, review)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    const overflow = () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(await overflow()).toBe(0);
+    await startGrading(page, "demo_marks.xlsx", INTRO);
+    await page.selectOption("#borderN", "3");
+    expect(await overflow()).toBe(0);
+    await page.click("#reviewBtn");
+    expect(await overflow()).toBe(0);
+  });
+}
