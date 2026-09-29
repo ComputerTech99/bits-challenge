@@ -419,3 +419,12 @@ test("#24 numeric course codes work and stray spaces don't split a course", asyn
     "2023A7PS0003P,85,A",
   ]);
 });
+
+test("#25 an unreadable file shows an inline error instead of throwing", async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", e => errors.push(e.message));
+  await upload(page, "corrupt.xlsx");
+  await expect(page.locator("#uploadError")).toContainText("could not be read");
+  expect(errors).toEqual([]);
+  expect(await courseOptions(page)).toEqual([""]);
+});

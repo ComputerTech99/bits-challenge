@@ -425,8 +425,15 @@ file.onchange=e=>{
   uploadError.innerText="";
   const r=new FileReader();
   r.onload=ev=>{
-    const wb=XLSX.read(ev.target.result,{type:"array"});
-    const parsed=parseMarksSheet(wb.Sheets[wb.SheetNames[0]]);
+    let parsed;
+    try{
+      const wb=XLSX.read(ev.target.result,{type:"array"});
+      parsed=parseMarksSheet(wb.Sheets[wb.SheetNames[0]]);
+    }catch(err){
+      // Not a spreadsheet SheetJS can open (corrupt, password-protected, ...).
+      uploadError.innerText=`"${f.name}" could not be read as an Excel file. Please check the file and upload it again.`;
+      return;
+    }
     if(parsed.errors.length){
       uploadError.innerText=parsed.errors.join("\n");
       return;
