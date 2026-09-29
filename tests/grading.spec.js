@@ -841,3 +841,76 @@ test("E2: Std dev stat and a text summary for screen readers", async ({ page }) 
   await expect(summary).toContainText("A 8 (80 to 100), A- 17 (70 to 79)");
   await expect(page.locator("#hist")).toHaveAttribute("aria-describedby", "chartSummary");
 });
+
+// ===== E3: borderline students =====
+
+// Expected groups computed from the fixture: students in the grade just below
+// each cutoff, within N marks of it. Returns { A: ["id (mark)", ...], ... }.
+function expectedBorderline(file, courseName, cut, N) {
+  const rows = XLSX.utils.sheet_to_json(XLSX.readFile(fixture(file)).Sheets.Marks).filter(r => r.Course === courseName);
+  const G = ["A", "A-", "B", "B-", "C", "C-", "D"], out = {};
+  G.forEach((g, i) => {
+    const floor = Math.max(cut[g] - N, i === G.length - 1 ? 0 : cut[G[i + 1]]);
+    const s = rows.filter(r => r["Total Marks"] >= floor && r["Total Marks"] < cut[g])
+      .sort((a, b) => b["Total Marks"] - a["Total Marks"] || String(a["BITS ID"]).localeCompare(String(b["BITS ID"])))
+      .map(r => `${r["BITS ID"]} (${r["Total Marks"]})`);
+    if (s.length) out[g] = s;
+  });
+  return out;
+}
+const DEFAULT_CUT = { A: 80, "A-": 70, B: 60, "B-": 50, C: 40, "C-": 30, D: 20 };
+
+async function shownBorderline(page) {
+  return page.locator("#borderline .bl-group").evaluateAll(groups => Object.fromEntries(groups.map(g =>
+    [g.dataset.grade, [...g.querySelectorAll("li")].map(li => li.textContent.trim())])));
+}
+
+test("E3: lists the students just below each cutoff (demo file, N = 2)", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  const expected = expectedBorderline("demo_marks.xlsx", INTRO, DEFAULT_CUT, 2);
+  expect(Object.keys(expected)).toEqual(["A", "B", "B-", "D"]); // cutoffs with nobody near are hidden
+  expect(await shownBorderline(page)).toEqual(expected);
+  await expect(page.locator('.bl-group[data-grade="A"] .bl-title')).toContainText("3 students 1–2 marks below A (starts at 80)");
+  await expect(page.locator('.bl-group[data-grade="D"] .bl-title')).toContainText("1 student 1 mark below D");
+});
+
+test("E3: changing N changes the list", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  for (const N of [1, 3]) {
+    await page.selectOption("#borderN", String(N));
+    expect(await shownBorderline(page)).toEqual(expectedBorderline("demo_marks.xlsx", INTRO, DEFAULT_CUT, N));
+  }
+});
+
+test("E3: the one-click action lowers the cutoff and updates the counts", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await page.getByRole("button", { name: "Lower A to 78 (+3 students)" }).click();
+  await expect(cutoffInput(page, "A")).toHaveValue("78");
+  expect((await gradeCounts(page)).A).toBe(8 + 3);
+  expect((await gradeCounts(page))["A-"]).toBe(17 - 3);
+  // Those three are now A; the next students below A (the 77) take their place.
+  expect((await shownBorderline(page)).A).toEqual(expectedBorderline("demo_marks.xlsx", INTRO, { ...DEFAULT_CUT, A: 78 }, 2).A);
+});
+
+test("E3: the action is disabled when a neighbouring cutoff blocks it", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await typeCutoff(page, "A-", 79); // A- is now just the 79; lowering A to 79 would empty it
+  const btn = page.getByRole("button", { name: "Lower A to 79 (+1 student)" });
+  await expect(btn).toBeDisabled();
+  await expect(page.locator('.bl-group[data-grade="A"] .help')).toHaveText("A- starts at 79, so A can't move down to 79.");
+  await expect(btn).toHaveAttribute("aria-describedby", "bl-why-g-A");
+});
+
+test("E3: hovering a student highlights their bar", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await page.locator('.bl-group[data-grade="B"] li').first().hover();
+  await expect(page.locator('#hist rect.bar.highlight')).toHaveAttribute("data-mark", "59");
+  await expect(page.locator('#hist rect.bar.highlight')).toHaveCount(1);
+  await page.mouse.move(0, 0);
+  await expect(page.locator('#hist rect.bar.highlight')).toHaveCount(0);
+});
+
+test("E3: clear empty state when nobody is near a cutoff", async ({ page }) => {
+  await startGrading(page, "identical_marks.xlsx", "CS F211"); // everyone has 65
+  await expect(page.locator("#borderline")).toHaveText("No students are within 2 marks below any cutoff.");
+});

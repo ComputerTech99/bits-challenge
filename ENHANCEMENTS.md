@@ -7,6 +7,7 @@ the end of a trimester:
 |---|---|---|
 | E1 | "How do I set cutoffs without breaking the ranges?" | A cutoff editor that can't produce invalid ranges |
 | E2 | "Where do my cutoffs fall on this class's distribution?" | The histogram becomes the control surface |
+| E3 | "Which students does moving a cutoff by one mark actually affect?" | Borderline students |
 
 All grade calculations go through one function, `gradeFor(mark)`. The counts, the
 distribution table, the chart, the borderline list and the CSV export can't
@@ -123,6 +124,52 @@ bars mean a one-mark move visibly changes which bars take which colour.
   invisible grab strip. That swallowed hover on the bars on either side of every
   cutoff, which are the marks an instructor most wants to inspect. The strip is
   now 6px and the knob is the main grab target.
+
+---
+
+## E3: Borderline students
+
+**Problem.** The real grading decision is rarely "is 80 the right number". It's
+"what about the three students on 78 and 79?". Those students were invisible. To
+find them, an instructor had to sort the spreadsheet by hand and cross-check
+every cutoff.
+
+**Solution.**
+- **Borderline panel:** for each cutoff, lists the students within N marks below
+  it (N = 1, 2 or 3; default 2), with their BITS ID and mark, e.g. "3 students
+  1–2 marks below A (starts at 80): 20247096 (79), 20246509 (78), 20247485 (78)".
+- **Adjacent grade only:** a group only includes students in the grade
+  immediately below that cutoff. A student can't appear in two groups, and a
+  group can never contain a whole neighbouring band.
+- **Empty groups hidden:** cutoffs with nobody near are hidden. If there are none
+  at all, the panel says so ("No students are within 2 marks below any cutoff.").
+- **One action per group:** "Lower A to 78 (+3 students)". It moves the cutoff to
+  the lowest listed mark through `setCutoff()`, so everything updates at once. It
+  is disabled, with a reason linked by `aria-describedby`, when it would leave
+  the next grade down with no marks ("A- starts at 79, so A can't move down to
+  79.").
+- **Linked highlight:** hovering a student dims every other bar in the histogram,
+  so theirs stands out.
+- **Decision (confirmed):** the action lowers the cutoff to the lowest listed
+  mark, so everyone listed moves up. That is one button per cutoff, not one per
+  mark.
+
+**Why this beats the obvious alternative.** The obvious alternative is a
+sortable student table. It holds the same data, but the instructor would have to
+work out which rows matter and what to do about them. The panel answers the
+actual question ("who is one mark away, and what happens if I include them?").
+It also turns the answer into a single, bounded, reversible action.
+
+**How it was tested.**
+- `E3:` tests compare the listed students per cutoff with an independent
+  calculation from the demo file (N = 2, then N = 1 and 3), and check that
+  cutoffs with nobody near are hidden.
+- The action is tested to move the cutoff and the counts (A 8 → 11, A- 17 → 14).
+  After the move, the next students below A take the group's place.
+- The disabled case (A- at 79) is tested, with its reason text and
+  `aria-describedby`.
+- Hovering a student highlights exactly their bar.
+- The empty state is tested on `identical_marks.xlsx`.
 
 ---
 

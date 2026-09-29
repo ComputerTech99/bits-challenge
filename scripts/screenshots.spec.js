@@ -16,6 +16,12 @@ const STATES = {
     await page.locator("#uploadError").waitFor();
   },
   loaded: async page => { await startGrading(page, DEMO, COURSE); await page.waitForTimeout(700); },
+  borderline: async page => {
+    await startGrading(page, DEMO, COURSE);
+    await page.selectOption("#borderN", "3");
+    await page.waitForTimeout(700);
+    await page.locator('.bl-group[data-grade="A"] li').first().hover();
+  },
   "cutoff-moved": async page => {
     await startGrading(page, DEMO, COURSE);
     await typeCutoff(page, "A", 78);

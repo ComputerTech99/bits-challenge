@@ -193,7 +193,8 @@ button:disabled{opacity:.45;cursor:not-allowed}
 #hist .curve{fill:none;stroke:var(--ink-muted);stroke-width:1.5;stroke-dasharray:6 4}
 #hist .hit{fill:transparent}
 #hist .hit.active{fill:var(--accent);fill-opacity:.12}
-#hist .bar.highlight{stroke:var(--accent-strong);stroke-width:2}
+/* Highlighting one mark dims the rest, so even a dark bar stands out. */
+#hist.has-highlight .bar:not(.highlight){opacity:.25}
 #hist .cutoff-line{stroke:var(--accent-strong);stroke-width:1.5}
 #hist .cutoff-knob{fill:var(--surface);stroke:var(--accent-strong);stroke-width:1.5}
 #hist .cutoff-handle{cursor:ew-resize;touch-action:none}
@@ -290,6 +291,18 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .dist tbody tr:last-child th,.dist tbody tr:last-child td{border-bottom:none}
 .dist .n{text-align:right}
 .dist td.n b{font-weight:600}
+/* ===== BORDERLINE STUDENTS ===== */
+.bl-controls{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:12px;color:var(--ink-muted)}
+.bl-controls label{font-weight:400;color:var(--ink-muted)}
+.bl-group{padding:12px 0;border-top:1px solid var(--rule)}
+.bl-group:first-child{border-top:none;padding-top:0}
+.bl-title{margin:0 0 8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.bl-list{list-style:none;margin:0 0 8px;padding:0;display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px}
+.bl-list li{color:var(--ink-muted);cursor:default}
+.bl-list li:hover{color:var(--ink)}
+.bl-list b{color:var(--ink);font-weight:600}
+.bl-action{max-width:100%}
+.bl-empty{margin:0;color:var(--ink-muted)}
 .change-count{font-size:14px;color:var(--ink-muted)}
 .change-count b{color:var(--ink);font-weight:600}
 
@@ -456,6 +469,19 @@ body.grading .empty-state{display:none}
         <tbody id="gradeSummary"></tbody>
       </table>
     </section>
+    <section class="panel" aria-labelledby="borderHeading">
+      <h2 id="borderHeading">Borderline students</h2>
+      <div class="bl-controls">
+        <label for="borderN">Within</label>
+        <select id="borderN">
+          <option value="1">1 mark</option>
+          <option value="2" selected>2 marks</option>
+          <option value="3">3 marks</option>
+        </select>
+        <span>below a cutoff</span>
+      </div>
+      <div id="borderline"></div>
+    </section>
   </div>
 </div>
 
@@ -570,6 +596,7 @@ function resetGradingView(){
   grades.innerHTML="";
   cutoffNote.textContent="";
   gradeSummary.innerHTML="";
+  borderline.innerHTML="";
   liveRegion.textContent="";
   changeCount.textContent="";
   resetRanges.disabled=true;
@@ -859,12 +886,81 @@ function updateChangeCount(){
   resetRanges.disabled=n===0;
 }
 
+// Borderline students: for each cutoff, those in the grade just below it who
+// are within N marks of it. Only the adjacent lower grade counts, so nobody is
+// listed twice and "Lower A to …" never swallows the whole next band.
+function borderlineGroups(rows,N){
+  const groups=[];
+  CUTOFF_GRADES.forEach((g,i)=>{
+    const below=GRADES[i+1];
+    const floor=Math.max(cutoffs[g]-N,bandRange(below)[0]);
+    const students=rows.filter(d=>d["Total Marks"]>=floor && d["Total Marks"]<cutoffs[g])
+      .sort((a,b)=>b["Total Marks"]-a["Total Marks"] || String(a["BITS ID"]).localeCompare(String(b["BITS ID"])));
+    if(!students.length) return;
+    const lowest=students[students.length-1]["Total Marks"];
+    // Blocked when the lowest student sits on the next cutoff down: moving there
+    // would leave that grade with no marks at all.
+    const [lo]=cutoffBounds(g);
+    groups.push({g,below,students,to:lowest,blocked:lowest<lo});
+  });
+  return groups;
+}
+
+function renderBorderline(rows){
+  const N=Number(borderN.value);
+  const groups=borderlineGroups(rows,N);
+  borderline.innerHTML="";
+  if(!groups.length){
+    borderline.innerHTML=`<p class="bl-empty">No students are within ${N} ${N===1?"mark":"marks"} below any cutoff.</p>`;
+    return;
+  }
+  groups.forEach(({g,below,students,to,blocked})=>{
+    const k=students.length;
+    const gaps=students.map(d=>cutoffs[g]-d["Total Marks"]);
+    const near=Math.min(...gaps), far=Math.max(...gaps);
+    const dist=near===far ? `${near} ${near===1?"mark":"marks"}` : `${near}–${far} marks`;
+    const div=document.createElement("div");
+    div.className="bl-group";
+    div.dataset.grade=g;
+    div.innerHTML=`
+      <p class="bl-title"><span><b>${k} ${k===1?"student":"students"}</b> ${dist} below ${g} (starts at ${cutoffs[g]})</span></p>
+      <ul class="bl-list"></ul>
+      <button type="button" class="secondary bl-action"></button>`;
+    const list=div.querySelector("ul");
+    students.forEach(d=>{
+      const li=document.createElement("li");
+      li.dataset.mark=d["Total Marks"];
+      li.innerHTML=`<span></span> (<b>${d["Total Marks"]}</b>)`;
+      li.firstChild.textContent=d["BITS ID"]; // IDs come from the file: never as HTML
+      li.addEventListener("pointerenter",()=>highlightMark(d["Total Marks"]));
+      li.addEventListener("pointerleave",()=>highlightMark(null));
+      list.appendChild(li);
+    });
+    const btn=div.querySelector("button");
+    btn.textContent=`Lower ${g} to ${to} (+${k} ${k===1?"student":"students"})`;
+    if(blocked){
+      btn.disabled=true;
+      const why=document.createElement("p");
+      why.className="help";
+      why.id=`bl-why-${gradeClass(g)}`;
+      why.textContent=`${below} starts at ${cutoffs[below]}, so ${g} can't move down to ${to}.`;
+      btn.setAttribute("aria-describedby",why.id);
+      div.appendChild(why);
+    }
+    btn.onclick=()=>setCutoff(g,to);
+    borderline.appendChild(div);
+  });
+}
+
+borderN.onchange=()=>{ if(document.body.classList.contains("grading")) render(); };
+
 // Recomputes everything that depends on the cutoffs.
 function render(){
   const rows=courseRows();
   const counts=countGrades(rows);
   updateCutoffEditor();
   renderDistribution(counts,rows.length);
+  renderBorderline(rows);
   announceCounts(counts);
   updateChart();
   updateChartSummary(rows,counts);
@@ -1104,6 +1200,7 @@ hist.addEventListener("keydown",e=>{
 // Outlines one mark's bar (used by the borderline list).
 function highlightMark(mark){
   if(!chart) return;
+  hist.classList.toggle("has-highlight",mark!==null);
   chart.bars.forEach((bar,i)=>{ if(bar) bar.classList.toggle("highlight",i===mark); });
 }
 
