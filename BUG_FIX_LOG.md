@@ -60,4 +60,3 @@ Serve with `npx serve .`, open the printed URL in Chrome, and enter an instructo
 | Choosing a course without an instructor name uses `alert()`. | The inline-error rule in CLAUDE.md covers invalid uploads. Kept the original behaviour and copy. |
 | The welcome banner keeps the name entered at course selection even if the name is edited later (the CSV uses the current name). | Cosmetic. The export is correct. |
 | A cascade past the ends of the scale (e.g. B Max = 100 makes A Min 101) leaves a blank dropdown. | Validation always flags the resulting ranges, so no invalid export is possible. Cosmetic only. |
-| The `/* LOCKED (VERBATIM) */` comments no longer describe the code under them. | They are the challenge authors' markers. Left in place for traceability to the original. |
