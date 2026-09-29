@@ -368,3 +368,8 @@ test("#20 upload uses readAsArrayBuffer, not the deprecated readAsBinaryString",
   await expect(stat(page, "Max")).toHaveText("100");
   expect(await page.evaluate(() => window.__reads)).toEqual(["readAsArrayBuffer"]);
 });
+
+test("#21 SheetJS is loaded from the pinned 0.18.5 URL", async ({ page }) => {
+  const srcs = await page.locator("script[src]").evaluateAll(s => s.map(x => x.getAttribute("src")));
+  expect(srcs).toEqual(["https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"]);
+});
