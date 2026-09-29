@@ -63,12 +63,18 @@ ONE place: the histogram with its grade bands. Everything else stays quiet.
 - `--ink #1c1a33` (text) · `--ink-muted #5f5b78` · `--rule #e3e0ef` (borders)
 - `--canvas #f5f4fa` (page) · `--surface #ffffff` (panels)
 - `--accent #5b3cc4` (BITS purple: primary action, focus, active cutoff)
-- `--accent-strong #312e81` (headings, app title)
+- `--accent-strong #312e81` (headings, app title) · `--accent-soft #eeeafb`
+  (quiet accent tint, e.g. the drop zone on hover)
 - `--danger #b42318` (errors ONLY; nothing else is ever red)
-- Grade ramp, one hue from dark to light, used for bars, chips and bands:
-  A `#2e1f7a`, A- `#3f2c9c`, B `#5b3cc4`, B- `#7a61d1`, C `#9a86dd`,
-  C- `#b7a8e8`, D `#d0c6f1`, E `#e6e0f8`. Text on each ramp step must meet
-  WCAG AA; use white text on the four darkest steps and ink on the rest.
+- Grade colours, used for bars, chips and bands. Each letter has its own hue
+  and the minus grade is a lighter tint of it:
+  A `#3b2a9e` · A- `#7764d7` (indigo), B `#1f64a8` · B- `#5593cf` (blue),
+  C `#16806f` · C- `#479c8d` (teal), D `#a8661a` (amber), E `#6b6f85`
+  (slate; never red, so E doesn't read as an error). A-, B- and C- were
+  darkened from the first proposal (`#8574db`, `#6fa3d6`, `#63b8a9`) to pass:
+  every bar needs 3:1 against its band (the grade colour at 7% on the
+  surface, WCAG 1.4.11) and chip text needs AA. Chip text is white, except
+  ink on B- and C-. No outline-style bars. Tests enforce both ratios.
 - The bell curve is `--ink-muted`, dashed. Never red.
 
 **Type**: IBM Plex Sans throughout (400/500/600). Scale 12 / 14 / 16 / 20 / 24px.

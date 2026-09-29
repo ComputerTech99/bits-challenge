@@ -16,11 +16,15 @@
 :root{
   --ink:#1c1a33; --ink-muted:#5f5b78; --rule:#e3e0ef;
   --canvas:#f5f4fa; --surface:#ffffff;
-  --accent:#5b3cc4; --accent-strong:#312e81;
+  --accent:#5b3cc4; --accent-strong:#312e81; --accent-soft:#eeeafb;
   --danger:#b42318;
-  /* Grade ramp: one hue, dark (A) to light (E). */
-  --g-A:#2e1f7a; --g-Am:#3f2c9c; --g-B:#5b3cc4; --g-Bm:#7a61d1;
-  --g-C:#9a86dd; --g-Cm:#b7a8e8; --g-D:#d0c6f1; --g-E:#e6e0f8;
+  /* Grade colours: one hue per letter, the minus grade a lighter tint of it.
+     Every bar has at least 3:1 against its band tint, and chip text is AA. */
+  --g-A:#3b2a9e; --g-Am:#7764d7;   /* indigo */
+  --g-B:#1f64a8; --g-Bm:#5593cf;   /* blue */
+  --g-C:#16806f; --g-Cm:#479c8d;   /* teal */
+  --g-D:#a8661a;                   /* amber */
+  --g-E:#6b6f85;                   /* slate: never red, E is not an error */
   --font:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   --radius-panel:12px; --radius-control:8px;
 }
@@ -134,7 +138,7 @@ a{color:var(--accent)}
   border-radius:var(--radius-control);
   background:var(--canvas);
 }
-.dropzone:hover,.dropzone.dragover{border-color:var(--accent);background:var(--g-E)}
+.dropzone:hover,.dropzone.dragover{border-color:var(--accent);background:var(--accent-soft)}
 .dropzone:focus-within{outline:2px solid var(--accent);outline-offset:2px}
 .dropzone input[type=file]{
   position:absolute;
@@ -241,11 +245,11 @@ button:disabled{opacity:.45;cursor:not-allowed}
 }
 .stat b{font-size:16px;font-weight:600;color:var(--ink)}
 
-/* ===== GRADE RAMP (text colours meet WCAG AA) ===== */
-.g-A{background:var(--g-A);color:#fff}   .g-Am{background:var(--g-Am);color:#fff}
-.g-B{background:var(--g-B);color:#fff}   .g-Bm{background:var(--g-Bm);color:#fff}
-.g-C{background:var(--g-C);color:var(--ink)} .g-Cm{background:var(--g-Cm);color:var(--ink)}
-.g-D{background:var(--g-D);color:var(--ink)} .g-E{background:var(--g-E);color:var(--ink)}
+/* ===== GRADE COLOURS (chip text meets WCAG AA: white, or ink on B- and C-) ===== */
+.g-A{background:var(--g-A);color:#fff}  .g-Am{background:var(--g-Am);color:#fff}
+.g-B{background:var(--g-B);color:#fff}  .g-Bm{background:var(--g-Bm);color:var(--ink)}
+.g-C{background:var(--g-C);color:#fff}  .g-Cm{background:var(--g-Cm);color:var(--ink)}
+.g-D{background:var(--g-D);color:#fff}  .g-E{background:var(--g-E);color:#fff}
 .chip{
   display:inline-flex;
   align-items:center;
@@ -1204,8 +1208,6 @@ function updateChart(){
     if(!bar) return;
     const g=gradeFor(mark);
     bar.style.fill=`var(${GRADE_COLOUR[g]})`;
-    // The two lightest ramp steps nearly vanish on white: outline them.
-    bar.style.stroke=(g==="D"||g==="E") ? "var(--g-C)" : "";
   });
   CUTOFF_GRADES.forEach(g=>{
     const h=chart.handles[g], cx=x(cutoffs[g]); // boundary = left edge of the cutoff mark

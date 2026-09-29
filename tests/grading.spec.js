@@ -782,9 +782,9 @@ async function dragHandle(page, grade, toMark) {
 test("E2: one bar per scored mark, coloured by the grade it currently receives", async ({ page }) => {
   await startGrading(page, "demo_marks.xlsx", INTRO);
   const bar = page.locator('#hist rect.bar[data-mark="79"]');
-  await expect(bar).toHaveCSS("fill", "rgb(63, 44, 156)");   // A- (#3f2c9c)
+  await expect(bar).toHaveCSS("fill", "rgb(119, 100, 215)"); // A- (#7764d7)
   await typeCutoff(page, "A", 79);
-  await expect(bar).toHaveCSS("fill", "rgb(46, 31, 122)");   // A  (#2e1f7a)
+  await expect(bar).toHaveCSS("fill", "rgb(59, 42, 158)");   // A  (#3b2a9e)
   expect((await chartGeometry(page)).bars).toHaveLength(new Set(introMarks()).size);
 });
 
@@ -1005,6 +1005,28 @@ test("a11y: text on every grade-ramp step meets WCAG AA (4.5:1)", async ({ page 
     els.map(e => ({ g: e.textContent, fg: getComputedStyle(e).color, bg: getComputedStyle(e).backgroundColor })));
   expect(chips).toHaveLength(8);
   for (const c of chips) expect.soft(contrast(c.fg, c.bg), `grade ${c.g}`).toBeGreaterThanOrEqual(4.5);
+});
+
+// Each band is its grade colour at low opacity over the panel. A bar in that
+// grade must stand out from it by at least 3:1 (WCAG 1.4.11, non-text contrast).
+async function barBandContrasts(page) {
+  const bands = await page.locator("#hist .bands rect").evaluateAll(rects => {
+    const surface = getComputedStyle(document.querySelector(".panel")).backgroundColor;
+    return rects.map(r => ({ fill: getComputedStyle(r).fill, alpha: Number(getComputedStyle(r).fillOpacity), surface }));
+  });
+  const nums = s => s.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number);
+  return bands.map(({ fill, alpha, surface }) => {
+    const [c, bg] = [nums(fill), nums(surface)];
+    const band = `rgb(${c.map((v, i) => Math.round(v * alpha + bg[i] * (1 - alpha))).join(",")})`;
+    return contrast(fill, band);
+  });
+}
+
+test("a11y: every bar has at least 3:1 contrast against its grade band", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  const ratios = await barBandContrasts(page);
+  expect(ratios).toHaveLength(8);
+  ["A", "A-", "B", "B-", "C", "C-", "D", "E"].forEach((g, i) => expect.soft(ratios[i], `grade ${g}`).toBeGreaterThanOrEqual(3));
 });
 
 test("a11y: errors, notes and count changes are announced", async ({ page }) => {
