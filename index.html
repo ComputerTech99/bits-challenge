@@ -608,6 +608,10 @@ function drawBellCurve(ctx, marks, progress, pxPerStudent){
 function computeStats(){
   const m=data.filter(d=>d.Course===course.value)
     .map(d=>d["Total Marks"]).sort((a,b)=>a-b);
+  if(!m.length){
+    ["min","max","avg","med"].forEach(id=>document.getElementById(id).textContent="—");
+    return;
+  }
   min.textContent=m[0];
   max.textContent=m[m.length-1];
   avg.textContent=(m.reduce((a,b)=>a+b,0)/m.length).toFixed(2);

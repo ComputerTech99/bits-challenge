@@ -251,3 +251,11 @@ test("#12 an in-flight animation does not repaint after a re-upload", async ({ p
   await page.waitForTimeout(600);
   expect(await purpleRows(page)).toEqual([]);
 });
+
+test("#13 stats show — instead of undefined/NaN when there is no data", async ({ page }) => {
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
+  await page.selectOption("#course", ""); // back to "Select a course to begin"
+  for (const label of ["Min", "Max", "Avg", "Median"]) {
+    await expect(stat(page, label)).toHaveText("—");
+  }
+});
