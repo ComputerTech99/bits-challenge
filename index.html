@@ -398,6 +398,7 @@ function parseMarksSheet(sheet){
   // table[i] is on spreadsheet row firstRow+i (1-based, as Excel shows it).
   const firstRow=XLSX.utils.decode_range(sheet["!ref"]).s.r+1;
   const rows=[], errors=[];
+  const firstSeen=new Map(); // "course\nID" -> row number where it first appeared
   table.forEach((r,i)=>{
     if(i===0) return; // header row
     if(!r.some(v=>String(v).trim()!=="")) return; // skip fully blank lines
@@ -406,6 +407,17 @@ function parseMarksSheet(sheet){
 
     if(String(id).trim()==="") errors.push(`Row ${rowNo}: BITS ID missing`);
     if(String(courseName).trim()==="") errors.push(`Row ${rowNo}: course missing`);
+
+    // One row per student per course (IDs compared trimmed, case-insensitively).
+    const idText=String(id).trim(), courseText=String(courseName).trim();
+    if(idText!=="" && courseText!==""){
+      const key=courseText+"\n"+idText.toUpperCase();
+      if(firstSeen.has(key)){
+        errors.push(`Row ${rowNo}: BITS ID ${idText} already appears in ${courseText} (row ${firstSeen.get(key)})`);
+      }else{
+        firstSeen.set(key,rowNo);
+      }
+    }
 
     // Numbers stay as-is; text such as " 85 " is accepted if it is numeric.
     const marks=typeof raw==="number" ? raw : Number(String(raw).trim());

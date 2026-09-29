@@ -93,6 +93,25 @@ write("bad_data.xlsx", [
   [id(8), "CS F211", 88],    // row 9: ok
 ]);
 
+// duplicate_ids: the same student twice in one course (exactly, and with
+// different case/spacing). The same ID in a different course is allowed.
+write("duplicate_ids.xlsx", [
+  HEADERS,                               // row 1
+  [id(1), "CS F211", 70],                // row 2
+  [id(2), "CS F211", 60],                // row 3
+  [id(1), "MATH F112", 50],              // row 4: other course, fine
+  [" 2023a7ps0002p ", "CS F211", 55],    // row 5: duplicate of row 3
+  [id(3), "CS F211", 40],                // row 6
+  [id(1), "CS F211", 90],                // row 7: duplicate of row 2
+]);
+
+// cross_course_ids: every student takes both courses (valid, no duplicates).
+write("cross_course_ids.xlsx", [
+  HEADERS,
+  [id(1), "CS F211", 70], [id(2), "CS F211", 45],
+  [id(1), "MATH F112", 82], [id(2), "MATH F112", 38],
+]);
+
 // missing_column: no marks column at all.
 write("missing_column.xlsx", [
   ["BITS ID", "Course", "Remarks"],

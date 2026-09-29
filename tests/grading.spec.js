@@ -536,3 +536,20 @@ test("#27 a new upload resets the timer, attempt count and both messages", async
   await download(page);
   await expect(page.locator("#thankyou")).toContainText("0 min 3 sec in your first attempt");
 });
+
+test("#28 duplicate BITS IDs within a course reject the upload", async ({ page }) => {
+  await upload(page, "duplicate_ids.xlsx");
+  const err = page.locator("#uploadError");
+  await expect(err).toContainText("Row 5: BITS ID 2023a7ps0002p already appears in CS F211 (row 3)");
+  await expect(err).toContainText("Row 7: BITS ID 2023A7PS0001P already appears in CS F211 (row 2)");
+  await expect(err).not.toContainText("Row 4:"); // same ID in another course is fine
+  expect(await courseOptions(page)).toEqual([""]);
+});
+
+test("#28 the same BITS ID in different courses is accepted", async ({ page }) => {
+  await startGrading(page, "cross_course_ids.xlsx", "MATH F112");
+  await expect(page.locator("#uploadError")).toBeEmpty();
+  expect(await courseOptions(page)).toEqual(["", "CS F211", "MATH F112"]);
+  const { text } = await download(page);
+  expect(text).toContain("2023A7PS0001P,82,A\n");
+});
