@@ -1090,3 +1090,7 @@ test("brand: the tab shows the BITS seal as an inline favicon", async ({ page })
   }, href);
   expect(size).toEqual([64, 64]);
 });
+
+test("brand: the tab title is just the tool's name (the favicon carries the brand)", async ({ page }) => {
+  await expect(page).toHaveTitle("Grading Console");
+});
