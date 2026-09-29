@@ -335,3 +335,22 @@ test("#18 attempt ordinals are correct (21st, 22nd, 23rd, 11th–13th)", async (
     if (expected[n]) await expect(page.locator("#thankyou")).toContainText(`in your ${expected[n]} attempt`);
   }
 });
+
+test("#19 Reset Range asks for confirmation once", async ({ page }) => {
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
+  await page.selectOption("#Amin", "90");
+  const dialogs = [];
+  page.on("dialog", d => { dialogs.push(d.message()); d.accept(); });
+  await page.click("#resetRanges");
+  await expect(page.locator("#Amin")).toHaveValue("80");
+  await expect(page.locator("#A-max")).toHaveValue("79");
+  expect(dialogs).toHaveLength(1);
+});
+
+test("#19 dismissing the confirmation leaves the ranges alone", async ({ page }) => {
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
+  await page.selectOption("#Amin", "90");
+  page.on("dialog", d => d.dismiss());
+  await page.click("#resetRanges");
+  await expect(page.locator("#Amin")).toHaveValue("90");
+});
