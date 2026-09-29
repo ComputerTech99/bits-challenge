@@ -324,6 +324,15 @@ function startTimer(){
   timerInterval=setInterval(renderTimer,1000);
 }
 
+// The timer is per course: stop it and show the idle 00:00 / empty ring.
+function resetTimer(){
+  clearInterval(timerInterval);
+  timerInterval=null;
+  gradingStartTime=null;
+  document.getElementById("timerText").innerText="00:00";
+  document.getElementById("timerArc").style.strokeDashoffset=circumference;
+}
+
 /* ===== EVERYTHING BELOW IS LOCKED (VERBATIM) ===== */
 
 const GRADES=["A","A-","B","B-","C","C-","D","E"];
@@ -350,6 +359,11 @@ function resetGradingView(){
   hist.getContext("2d").clearRect(0,0,380,240);
   download.disabled=true;
   download.classList.remove("enabled");
+  // Timer, attempt count and messages belong to one course.
+  resetTimer();
+  finalizeCount=0;
+  thankyou.innerText="";
+  exportError.innerText="";
 }
 
 // Accepted spellings for each required column (compared trimmed, lower-case).
@@ -448,15 +462,13 @@ file.onchange=e=>{
 };
 
 course.onchange=()=>{
-  // Keep the grading view in step with the dropdown: no course, no grading UI.
-  if(!course.value){
-    resetGradingView();
-    return;
-  }
+  // Every course change starts from a clean view (including the per-course
+  // timer and attempt count), and no course means no grading UI.
+  resetGradingView();
+  if(!course.value) return;
   if(!instructor.value.trim()){
     alert("Please enter instructor name first");
     course.value="";
-    resetGradingView();
     return;
   }
   welcome.innerText=`Welcome ${instructor.value.toUpperCase()}. Please review and finalize grading.`;

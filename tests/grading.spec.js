@@ -172,13 +172,16 @@ test("#11 timer starts on the first course selection, not on page load", async (
   await expect(page.locator("#timerText")).toHaveText("01:05");
 });
 
-test("#11 timer is not restarted by a second course selection and stops on finalize", async ({ page }) => {
+test("#11 timer runs a single interval and stops on finalize", async ({ page }) => {
+  // Originally asserted the timer carried on across course changes; since #27
+  // each course has its own timer, so a switch restarts it from 00:00.
   await pausedClock(page);
   await startGrading(page, "valid_basic.xlsx", "CS F211");
   await page.clock.fastForward(10_000);
   await page.selectOption("#course", "MATH F112");
+  await expect(page.locator("#timerText")).toHaveText("00:00");
   await page.clock.fastForward(10_000);
-  await expect(page.locator("#timerText")).toHaveText("00:20");
+  await expect(page.locator("#timerText")).toHaveText("00:10");
 
   await download(page);
   const frozen = await page.locator("#timerText").textContent();
@@ -494,3 +497,42 @@ for (const course of ["CS F211", "MATH F112"]) {
     expect(Math.min(...ys)).toBeGreaterThanOrEqual(0);
   });
 }
+
+test("#27 timer, attempt count and thank-you message are per course", async ({ page }) => {
+  await pausedClock(page);
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
+  await page.clock.fastForward(10_000);
+  await download(page);
+  await expect(page.locator("#thankyou")).toContainText("0 min 10 sec in your first attempt");
+
+  await page.selectOption("#course", "MATH F112");
+  await expect(page.locator("#thankyou")).toBeEmpty();
+  await expect(page.locator("#timerText")).toHaveText("00:00");
+  await page.clock.fastForward(5_000);
+  await expect(page.locator("#timerText")).toHaveText("00:05"); // running again, not frozen on CS F211
+  await download(page);
+  await expect(page.locator("#thankyou")).toContainText("0 min 5 sec in your first attempt");
+});
+
+test("#27 a new upload resets the timer, attempt count and both messages", async ({ page }) => {
+  await pausedClock(page);
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
+  await page.clock.fastForward(7_000);
+  await download(page);
+  await page.fill("#instructor", "");
+  await page.click("#download");
+  await expect(page.locator("#exportError")).not.toBeEmpty();
+  await expect(page.locator("#thankyou")).not.toBeEmpty();
+
+  await upload(page, "valid_second.xlsx");
+  await expect(page.locator("#course option")).toHaveCount(3);
+  await expect(page.locator("#thankyou")).toBeEmpty();
+  await expect(page.locator("#exportError")).toBeEmpty();
+  await expect(page.locator("#timerText")).toHaveText("00:00");
+
+  await page.fill("#instructor", "Dr Rao");
+  await page.selectOption("#course", "BIO F110");
+  await page.clock.fastForward(3_000);
+  await download(page);
+  await expect(page.locator("#thankyou")).toContainText("0 min 3 sec in your first attempt");
+});
