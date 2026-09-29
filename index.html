@@ -332,13 +332,29 @@ let data=[];
 let previousSummary={};
 let finalizeCount = 0;
 
+// Clear everything derived from the previous upload / course selection.
+function resetGradingView(){
+  grades.innerHTML="";
+  rangeError.innerText="";
+  gradeSummary.innerHTML="";
+  welcome.innerText="";
+  ["min","max","avg","med"].forEach(id=>document.getElementById(id).textContent="—");
+  hist.getContext("2d").clearRect(0,0,380,240);
+  download.disabled=true;
+  download.classList.remove("enabled");
+}
+
 file.onchange=e=>{
-  // CodeForge challenge bug: stale course options can survive a second upload.
+  // A new upload replaces the old one completely.
+  data=[];
+  course.options.length=1; // keep only the placeholder option
+  resetGradingView();
   const r=new FileReader();
   r.onload=ev=>{
     const wb=XLSX.read(ev.target.result,{type:"binary"});
     data=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-    data.map(d=>d.Course).forEach(c=>{
+    // One option per distinct course, not one per student row.
+    [...new Set(data.map(d=>d.Course))].forEach(c=>{
       course.add(new Option(c,c));
     });
   };
