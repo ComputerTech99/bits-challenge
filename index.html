@@ -452,6 +452,13 @@ function cascadeMaxFrom(index){
   }
 }
 
+// Mirror of cascadeMaxFrom: a Max change moves the next-higher grade's Min.
+function cascadeMinFrom(index){
+  if(index===0) return; // A has no higher grade
+  const max=+document.getElementById(GRADES[index]+"max").value;
+  document.getElementById(GRADES[index-1]+"min").value=max+1;
+}
+
 function buildGradeUI(){
   grades.innerHTML="";
   GRADES.forEach((g,idx)=>{
@@ -479,6 +486,7 @@ function buildGradeUI(){
     maxSel.onchange=()=>{
       card.classList.add("lift");
       setTimeout(()=>card.classList.remove("lift"),30);
+      cascadeMinFrom(idx);
       updateAll();
     };
 

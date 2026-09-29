@@ -135,3 +135,18 @@ test("#9 a single-mark band (A = 100–100) is valid", async ({ page }) => {
   expect(text).toContain("2023A7PS0006P,100,A\n");
   expect(text).toContain("2023A7PS0005P,80,A-\n");
 });
+
+test("#10 changing a Max moves the next-higher grade's Min", async ({ page }) => {
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
+  await page.selectOption("#Bmax", "72");
+  await expect(page.locator("#A-min")).toHaveValue("73");
+  await expect(page.locator("#rangeError")).toBeEmpty();
+  await expect(page.locator("#download")).toBeEnabled();
+});
+
+test("#10 changing a Min still moves the next-lower grade's Max", async ({ page }) => {
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
+  await page.selectOption("#Bmin", "55");
+  await expect(page.locator("#B-max")).toHaveValue("54");
+  await expect(page.locator("#rangeError")).toBeEmpty();
+});
