@@ -1071,3 +1071,12 @@ for (const width of [360, 1600]) {
     expect(await overflow()).toBe(0);
   });
 }
+
+test("brand: the logo is the page heading, loads from inside index.html, and has alt text", async ({ page }) => {
+  await expect(page.getByRole("heading", { level: 1, name: "BITS Pilani Digital" })).toBeVisible();
+  const logo = page.locator(".appbar h1 img.logo");
+  await expect(logo).toHaveAttribute("alt", "BITS Pilani Digital");
+  expect(await logo.getAttribute("src")).toMatch(/^data:image\/webp;base64,/); // no extra file to ship
+  expect(await logo.evaluate(img => img.complete && img.naturalWidth > 0)).toBe(true);
+  expect((await logo.boundingBox()).height).toBe(48);
+});

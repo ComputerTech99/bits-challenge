@@ -228,8 +228,9 @@ The four enhancements sit on a new foundation built to the CLAUDE.md design
 system. The feel is a calm, institutional mark sheet, and the one bold element
 is the histogram with its grade bands.
 
-- **Layout.** An app bar (title, plus instructor · course · class size · timer
-  once grading starts) sits above a setup panel. The setup panel collapses to a
+- **Layout.** An app bar (the BITS Pilani Digital logo and "Grading console",
+  plus instructor · course · class size · timer once grading starts) sits above
+  a setup panel. The setup panel collapses to a
   one-line summary with "Edit" once a course is open, keeping the course switcher
   visible. The workspace is the chart, cutoff editor and stats on the left, with
   the grade distribution and borderline students on the right. It stacks into
@@ -252,6 +253,11 @@ is the histogram with its grade bands.
   what to do next. Upload errors keep their row-level messages, shown in a
   `--danger` callout. `alert()` is gone: choosing a course without a name gives
   an inline prompt and moves focus to the name field.
+- **Logo.** `assets/logo.png` is trimmed and scaled to 2× its 48px display
+  height by `scripts/make-logo.mjs`, then inlined as a ~10 KB WebP data URI.
+  The app stays a single self-contained `index.html`. The logo is the page's
+  `<h1>`, with `alt="BITS Pilani Digital"`. Its seal keeps its own brand colours;
+  the "nothing else is ever red" rule applies to UI colour, not to the logo.
 - **Motion.** The bars grow once when a course opens, and the dialog fades in.
   Nothing else animates (no hover lifts, no pulsing chips), and
   `prefers-reduced-motion` disables both.
