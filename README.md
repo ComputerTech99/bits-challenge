@@ -1,0 +1,5 @@
+# BITS Digital CodeForge: Grading Console
+
+A single-file web app (`index.html`) built for the BITS Digital CodeForge challenge. It is a prototype, not an official BITS tool. An instructor uploads an Excel file of student marks (columns BITS ID, Course, Total Marks), picks a course, reviews the histogram, bell curve and summary statistics, adjusts the eight grade bands (A … E), and downloads the final grades as a CSV. The app has no build step and its only runtime dependency is SheetJS 0.18.5 from jsDelivr, so you can open `index.html` directly or serve the folder with `npx serve .`. Node is only needed for the dev tooling: run `npm install` once, then `node fixtures/generate.js` to regenerate the `.xlsx` test fixtures and `npx playwright install chromium && npx playwright test` to run the Playwright suite (it starts a local server itself). Bug fixes are documented in [`BUG_FIX_LOG.md`](BUG_FIX_LOG.md) and AI-tool use in [`AI_USAGE.md`](AI_USAGE.md).
+
+**Live URL:** _coming soon (GitHub Pages)_
