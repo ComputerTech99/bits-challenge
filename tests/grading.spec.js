@@ -7,6 +7,13 @@ test.beforeEach(async ({ page }) => {
   await openApp(page);
 });
 
+// Install a fake clock that only moves when the test advances it.
+async function pausedClock(page) {
+  await page.clock.install({ time: new Date(2026, 0, 1, 9, 0, 0) });
+  await page.goto("/");
+  await page.clock.pauseAt(new Date(2026, 0, 1, 9, 0, 1));
+}
+
 test("#1 Min and Max stats show the right values", async ({ page }) => {
   await startGrading(page, "valid_basic.xlsx", "CS F211");
   await expect(stat(page, "Min")).toHaveText("0");
@@ -152,8 +159,7 @@ test("#10 changing a Min still moves the next-lower grade's Max", async ({ page 
 });
 
 test("#11 timer starts on the first course selection, not on page load", async ({ page }) => {
-  await page.clock.install();
-  await page.goto("/");
+  await pausedClock(page);
   await page.clock.fastForward("05:00");
   await expect(page.locator("#timerText")).toHaveText("00:00");
 
@@ -164,8 +170,7 @@ test("#11 timer starts on the first course selection, not on page load", async (
 });
 
 test("#11 timer is not restarted by a second course selection and stops on finalize", async ({ page }) => {
-  await page.clock.install();
-  await page.goto("/");
+  await pausedClock(page);
   await startGrading(page, "valid_basic.xlsx", "CS F211");
   await page.clock.fastForward(10_000);
   await page.selectOption("#course", "MATH F112");
@@ -300,8 +305,7 @@ test("#15 export is blocked inline when the instructor name is empty", async ({ 
 });
 
 test("#16 lift and pulse classes stay on for the 250ms transition", async ({ page }) => {
-  await page.clock.install();
-  await page.goto("/");
+  await pausedClock(page);
   await startGrading(page, "valid_basic.xlsx", "CS F211");
   await page.selectOption("#Amin", "90"); // moves students from A to A-
   await page.clock.runFor(100);
@@ -310,4 +314,14 @@ test("#16 lift and pulse classes stay on for the 250ms transition", async ({ pag
   await page.clock.runFor(200);
   await expect(page.locator(".grade.lift")).toHaveCount(0);
   await expect(page.locator(".grade-summary span.pulse")).toHaveCount(0);
+});
+
+test("#17 switching course does not pulse the summary chips", async ({ page }) => {
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
+  await page.waitForTimeout(500);
+  await page.selectOption("#course", "MATH F112");
+  // Read once, immediately: a retrying assertion would just wait out the 250ms pulse.
+  const classes = await page.locator(".grade-summary span").evaluateAll(s => s.map(x => x.className));
+  expect(classes).toHaveLength(8);
+  expect(classes.filter(c => c.includes("pulse"))).toEqual([]);
 });

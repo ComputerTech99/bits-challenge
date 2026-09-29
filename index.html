@@ -447,6 +447,7 @@ course.onchange=()=>{
   }
   welcome.innerText=`Welcome ${instructor.value.toUpperCase()}. Please review and finalize grading.`;
   startTimer();
+  previousSummary={}; // a new course is not a change to pulse about
   buildGradeUI();
   updateAll();
 };
