@@ -342,6 +342,7 @@ function resetGradingView(){
   gradeSummary.innerHTML="";
   welcome.innerText="";
   ["min","max","avg","med"].forEach(id=>document.getElementById(id).textContent="—");
+  cancelAnimationFrame(histFrame);
   hist.getContext("2d").clearRect(0,0,380,240);
   download.disabled=true;
   download.classList.remove("enabled");
@@ -542,7 +543,13 @@ function updateAll(){
   computeGradeSummary();
 }
 
+// Histogram geometry: bar i is drawn at x = 30+i*32, 24px wide, on a baseline
+// at y = 210. The tallest bar is BAR_AREA px high.
+const BAR_AREA=180;
+let histFrame=null; // id of the running histogram animation frame, if any
+
 function drawHistogram(){
+  cancelAnimationFrame(histFrame); // stop an animation started by an earlier call
   const ctx=hist.getContext("2d");
   ctx.clearRect(0,0,380,240);
 
@@ -551,6 +558,7 @@ function drawHistogram(){
 
   let bins=Array(10).fill(0);
   marks.forEach(m=>bins[Math.min(9,Math.floor(m/10))]++);
+  const pxPerStudent=BAR_AREA/Math.max(...bins);
 
   let start=null;
   function animate(ts){
@@ -559,33 +567,39 @@ function drawHistogram(){
     ctx.clearRect(0,0,380,240);
 
     bins.forEach((v,i)=>{
-      const h=v*12*p;
+      const h=v*pxPerStudent*p;
       ctx.fillStyle="#5b3cc4";
       ctx.fillRect(30+i*32,210-h,24,h);
       ctx.fillStyle="#111827";
-      ctx.font="10px Arial";
-      ctx.fillText(`${i*10}-${i*10+10}`,30+i*32,228);
+      ctx.font="9px Arial"; // 10px labels run together at 32px spacing
+      ctx.textAlign="center";
+      const label=i===9 ? "90–100" : `${i*10}–${i*10+9}`; // last bin includes 100
+      ctx.fillText(label,30+i*32+12,228);
     });
 
-    drawBellCurve(ctx, marks, p);
+    drawBellCurve(ctx, marks, p, pxPerStudent);
 
-    if(p<1) requestAnimationFrame(animate);
+    if(p<1) histFrame=requestAnimationFrame(animate);
   }
-  requestAnimationFrame(animate);
+  histFrame=requestAnimationFrame(animate);
 }
 
-function drawBellCurve(ctx, marks, progress){
-  const mean=marks.reduce((a,b)=>a+b,0)/marks.length;
-  const std=Math.sqrt(marks.reduce((a,b)=>a+(b-mean)**2,0)/marks.length);
+// Draws the normal curve as the expected number of students per 10-mark bin
+// (n × 10 × pdf), on the same scale as the bars and centred on them.
+function drawBellCurve(ctx, marks, progress, pxPerStudent){
+  const n=marks.length;
+  const mean=marks.reduce((a,b)=>a+b,0)/n;
+  const std=Math.sqrt(marks.reduce((a,b)=>a+(b-mean)**2,0)/n);
+  if(std===0) return; // all marks identical: the curve is undefined
   ctx.strokeStyle="#dc2626";
   ctx.lineWidth=2;
   ctx.beginPath();
   const maxX=Math.floor(100*progress);
   for(let x=0;x<=maxX;x++){
-    const y=(1/(std*Math.sqrt(2*Math.PI)))*
+    const pdf=(1/(std*Math.sqrt(2*Math.PI)))*
       Math.exp(-0.5*((x-mean)/std)**2);
-    const px=30+(x/10)*30;
-    const py=210-y*3000;
+    const px=42+((x-5)/10)*32; // mark 5 -> centre of bar 0 (x=42), 32px per bin
+    const py=210-n*10*pdf*pxPerStudent;
     x===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
   }
   ctx.stroke();

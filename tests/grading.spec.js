@@ -177,3 +177,77 @@ test("#11 timer is not restarted by a second course selection and stops on final
   await page.clock.fastForward(30_000);
   await expect(page.locator("#timerText")).toHaveText(frozen);
 });
+
+// Colour of any pixel on the histogram canvas matching the bar colour #5b3cc4.
+async function purpleRows(page) {
+  return page.evaluate(() => {
+    const d = document.getElementById("hist").getContext("2d").getImageData(0, 0, 380, 240).data;
+    const rows = new Set();
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i] === 0x5b && d[i + 1] === 0x3c && d[i + 2] === 0xc4) rows.add(Math.floor(i / 4 / 380));
+    }
+    return [...rows].sort((a, b) => a - b);
+  });
+}
+
+// Calls drawBellCurve with a stub context and returns the [x, y] points drawn.
+async function curvePoints(page, marks, pxPerStudent = 1) {
+  return page.evaluate(([marks, pxPerStudent]) => {
+    const pts = [];
+    const ctx = { beginPath() {}, stroke() {}, moveTo: (x, y) => pts.push([x, y]), lineTo: (x, y) => pts.push([x, y]) };
+    drawBellCurve(ctx, marks, 1, pxPerStudent);
+    return pts;
+  }, [marks, pxPerStudent]);
+}
+
+test("#12 bars are scaled to the tallest bin and stay inside the canvas", async ({ page }) => {
+  await startGrading(page, "large_class.xlsx", "CS F211");
+  await page.waitForTimeout(600);
+  const rows = await purpleRows(page);
+  expect(rows[0]).toBeGreaterThanOrEqual(25); // headroom above the tallest bar
+  expect(rows[0]).toBeLessThanOrEqual(35);    // ...but it does fill the chart
+});
+
+test("#12 bin labels are 0–9 … 90–100", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__labels = [];
+    const orig = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (t, ...rest) {
+      window.__labels.push(String(t));
+      return orig.call(this, t, ...rest);
+    };
+  });
+  await page.goto("/");
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
+  await page.waitForTimeout(600);
+  const labels = await page.evaluate(() => window.__labels.slice(-10));
+  expect(labels).toEqual(["0–9", "10–19", "20–29", "30–39", "40–49", "50–59", "60–69", "70–79", "80–89", "90–100"]);
+});
+
+test("#12 bell curve is aligned to bar centres", async ({ page }) => {
+  const pts = await curvePoints(page, [...Array(50).fill(45), ...Array(50).fill(65)]);
+  // bar i spans x = 30+i*32 .. +24, so bin 0 (marks 0–9) is centred at 42 and bin 9 at 330
+  expect(pts[5][0]).toBeCloseTo(42, 0);
+  expect(pts[95][0]).toBeCloseTo(330, 0);
+});
+
+test("#12 bell curve is drawn as expected student counts (n × 10 × pdf)", async ({ page }) => {
+  // 100 students, mean 55, std 10: expected count per 10-mark bin at the mean = 100*10*pdf(55)
+  const pts = await curvePoints(page, [...Array(50).fill(45), ...Array(50).fill(65)], 1);
+  const expected = 100 * 10 * (1 / (10 * Math.sqrt(2 * Math.PI)));
+  expect(210 - pts[55][1]).toBeCloseTo(expected, 1);
+});
+
+test("#12 no curve (and no NaN) when every mark is identical", async ({ page }) => {
+  const pts = await curvePoints(page, Array(12).fill(65));
+  expect(pts.every(([x, y]) => Number.isFinite(x) && Number.isFinite(y))).toBe(true);
+  expect(pts).toEqual([]);
+});
+
+test("#12 an in-flight animation does not repaint after a re-upload", async ({ page }) => {
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
+  await upload(page, "valid_second.xlsx"); // well inside the 400ms animation
+  await expect(page.locator("#course option")).toHaveCount(3);
+  await page.waitForTimeout(600);
+  expect(await purpleRows(page)).toEqual([]);
+});
