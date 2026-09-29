@@ -88,6 +88,8 @@ h2{font-size:16px}
   min-width:0;
 }
 .panel > h2{margin-bottom:12px}
+.panel > h2:has(+ .chart-help){margin-bottom:4px}
+.chart-help{margin-bottom:12px}
 .workspace{
   display:grid;
   grid-template-columns:minmax(0,1fr) 320px;
@@ -201,10 +203,12 @@ button:disabled{opacity:.45;cursor:not-allowed}
 #hist.has-highlight .bar:not(.highlight){opacity:.25}
 #hist .cutoff-line{stroke:var(--accent-strong);stroke-width:1.5}
 #hist .cutoff-knob{fill:var(--surface);stroke:var(--accent-strong);stroke-width:1.5}
+#hist .cutoff-label{font-weight:600;fill:var(--ink);pointer-events:none}
 #hist .cutoff-handle,#hist .handle-hit{cursor:ew-resize;touch-action:none}
+/* Active (hovered or being dragged): accent line and a filled accent pill. */
 #hist .cutoff-handle:hover .cutoff-line,#hist .cutoff-handle.dragging .cutoff-line{stroke:var(--accent);stroke-width:2.5}
-#hist .cutoff-handle:hover .cutoff-knob,#hist .cutoff-handle.dragging .cutoff-knob{stroke:var(--accent);fill:var(--g-E)}
-#hist .handle-hit{fill:transparent}
+#hist .cutoff-handle:hover .cutoff-knob,#hist .cutoff-handle.dragging .cutoff-knob{stroke:var(--accent);fill:var(--accent)}
+#hist .cutoff-handle:hover .cutoff-label,#hist .cutoff-handle.dragging .cutoff-label{fill:#fff}#hist .handle-hit{fill:transparent}
 #hist .bars.grow{animation:grow .45s ease-out}
 @keyframes grow{from{transform:scaleY(0)}}
 .tooltip{
@@ -472,6 +476,7 @@ body.grading .empty-state{display:none}
 <div class="workspace">
   <section class="panel" aria-labelledby="analysisHeading">
     <h2 id="analysisHeading">Distribution and cutoffs</h2>
+    <p class="help chart-help" id="chartHelp">Drag a line or use the controls below to move a cutoff.</p>
     <div class="chart" id="chartBox">
       <svg id="hist" tabindex="0" role="img"
         aria-label="Histogram of marks with grade bands. Use the left and right arrow keys to read the number of students at each mark."
@@ -1167,7 +1172,9 @@ function buildChart(animate){
     const h=svgEl("g",{class:"cutoff-handle","data-grade":g},handleLayer);
     svgEl("rect",{class:"handle-hit",y:m.top,width:hitWidth,height:plotH},h);
     svgEl("line",{class:"cutoff-line",y1:m.top,y2:base},h);
-    svgEl("rect",{class:"cutoff-knob",y:m.top+4,width:12,height:22,rx:3},h);
+    // The grab pill: "A 80", sized and placed in updateChart().
+    svgEl("rect",{class:"cutoff-knob",height:PILL_H,rx:PILL_H/2},h);
+    svgEl("text",{class:"cutoff-label","text-anchor":"middle"},h);
     h.addEventListener("pointerdown",e=>startDrag(e,g,h));
     // Only a handle blocks touch scrolling; a swipe anywhere else on the chart
     // still scrolls the page. (In Chromium, touch-action on SVG children alone
@@ -1205,7 +1212,32 @@ function updateChart(){
     h.querySelector(".handle-hit").setAttribute("x",cx-chart.hitWidth/2);
     const line=h.querySelector(".cutoff-line");
     line.setAttribute("x1",cx); line.setAttribute("x2",cx);
-    h.querySelector(".cutoff-knob").setAttribute("x",cx-6);
+    h.querySelector(".cutoff-label").textContent=`${g} ${cutoffs[g]}`;
+  });
+  layoutPills();
+}
+
+// Places each handle's pill on its line near the top of the plot. Pills that
+// would touch the one before them drop to a second row, so when cutoffs are
+// close together (or the chart is narrow) no label covers another.
+const PILL_H=20, PILL_GAP=4;
+function layoutPills(){
+  const {x,m,W}=chart;
+  const rowEnds=[-Infinity,-Infinity]; // right edge of the last pill in each row
+  // Left to right: D has the lowest cutoff, A the highest.
+  [...CUTOFF_GRADES].reverse().forEach(g=>{
+    const h=chart.handles[g], label=h.querySelector(".cutoff-label");
+    const textW=label.getComputedTextLength(); // 0 if not rendered yet
+    const w=(textW>0 ? Math.ceil(textW) : 30)+14;
+    // Centred on the line, but kept inside the plot at either end.
+    const left=Math.min(W-m.right-w,Math.max(m.left,x(cutoffs[g])-w/2));
+    let row=rowEnds.findIndex(end=>left>=end+PILL_GAP);
+    if(row<0) row=rowEnds[0]<=rowEnds[1] ? 0 : 1; // both taken: the row that ends first
+    rowEnds[row]=left+w;
+    const top=m.top+4+row*(PILL_H+PILL_GAP);
+    const knob=h.querySelector(".cutoff-knob");
+    knob.setAttribute("x",left); knob.setAttribute("y",top); knob.setAttribute("width",w);
+    label.setAttribute("x",left+w/2); label.setAttribute("y",top+PILL_H/2+4);
   });
 }
 

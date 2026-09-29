@@ -128,6 +128,30 @@ bars mean a one-mark move visibly changes which bars take which colour.
 
 ---
 
+### Stage 2B follow-up: handles you can read
+
+**Problem (from review).** The handles were bare lines with a small knob. You had to look at the
+controls below to know which cutoff a line was and what value it had. Nothing told you the
+lines could be dragged at all.
+
+**Solution.**
+- Each knob is now a pill labelled with its grade and value ("A 80"). The label updates live
+  during a drag.
+- Hovering or dragging makes the line and pill accent-coloured (a filled pill with white text).
+  The cursor is `ew-resize`.
+- Where two pills would touch (cutoffs close together, or a 390px screen), the later one drops
+  to a second row. Labels never cover each other, and pills stay inside the plot at 0 and 100.
+- A line of helper text under the panel title: "Drag a line or use the controls below to move a
+  cutoff."
+
+**How tested.** `E2+` tests:
+- The labels read `A 80 … D 20` and follow a typed cutoff.
+- During a mouse drag (button still down) the label reads the new value and the handle has its
+  active state.
+- Pill bounding boxes never overlap at 1440px or 390px, including with A- moved right next to A.
+
+Screenshots checked at 1440 and 390.
+
 ## E3: Borderline students
 
 **Problem.** The real grading decision is rarely "is 80 the right number". It's

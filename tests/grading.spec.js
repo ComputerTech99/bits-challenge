@@ -1178,6 +1178,50 @@ test("#33 the instructor and course are shown once, in the app bar", async ({ pa
   }
 });
 
+// ===== Stage 2B: E2 follow-ups (chart) =====
+
+function handleLabel(page, grade) {
+  return page.locator(`.cutoff-handle[data-grade="${grade}"] .cutoff-label`);
+}
+
+test("E2+: each handle is labelled with its grade and value, and follows typed cutoffs", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await expect(page.locator("#chartHelp")).toHaveText("Drag a line or use the controls below to move a cutoff.");
+  const labels = await page.locator("#hist .cutoff-label").allTextContents();
+  expect(labels).toEqual(["A 80", "A- 70", "B 60", "B- 50", "C 40", "C- 30", "D 20"]);
+  await typeCutoff(page, "B-", 52);
+  await expect(handleLabel(page, "B-")).toHaveText("B- 52");
+});
+
+test("E2+: the label updates live and the handle is active while dragging", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  const p = await handlePoint(page, "A");
+  await page.mouse.move(p.x, p.y);
+  await expect(page.locator('.cutoff-handle[data-grade="A"]')).toHaveCSS("cursor", "ew-resize");
+  await page.mouse.down();
+  await page.mouse.move(await markToPageX(page, 76), p.y, { steps: 6 });
+  await expect(handleLabel(page, "A")).toHaveText("A 76"); // before letting go
+  await expect(page.locator('.cutoff-handle[data-grade="A"]')).toHaveClass(/dragging/);
+  await page.mouse.up();
+  await expect(page.locator('.cutoff-handle[data-grade="A"]')).not.toHaveClass(/dragging/);
+});
+
+// Bounding boxes of the pills, which must never overlap (they stagger when narrow).
+async function pillsOverlap(page) {
+  const boxes = await page.locator("#hist .cutoff-knob").evaluateAll(els => els.map(e => e.getBoundingClientRect()).map(r => ({ l: r.left, r: r.right, t: r.top, b: r.bottom })));
+  return boxes.some((a, i) => boxes.some((b, j) => i < j && a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b));
+}
+
+for (const width of [1440, 390]) {
+  test(`E2+: handle labels never overlap at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await startGrading(page, "demo_marks.xlsx", INTRO);
+    expect(await pillsOverlap(page)).toBe(false);
+    await typeCutoff(page, "A-", 78); // A- right next to A
+    expect(await pillsOverlap(page)).toBe(false);
+  });
+}
+
 test.describe("#32 touch at 390px", () => {
   test.use({ viewport: { width: 390, height: 700 }, hasTouch: true, isMobile: true });
 
