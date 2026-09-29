@@ -1094,3 +1094,32 @@ test("brand: the tab shows the BITS seal as an inline favicon", async ({ page })
 test("brand: the tab title is just the tool's name (the favicon carries the brand)", async ({ page }) => {
   await expect(page).toHaveTitle("Grading Console");
 });
+
+// ===== Stage 2B: fixes from review (BUG_FIX_LOG #31 onward) =====
+
+test("#31 each course keeps its own cutoffs when switching course", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await typeCutoff(page, "A", 78);
+  await page.selectOption("#course", "Linear Algebra");
+  await expect(cutoffInput(page, "A")).toHaveValue("80"); // untouched course: defaults
+  await typeCutoff(page, "B", 62);
+  await page.selectOption("#course", INTRO);
+  await expect(cutoffInput(page, "A")).toHaveValue("78");
+  await expect(cutoffInput(page, "B")).toHaveValue("60");
+  expect((await gradeCounts(page)).A).toBe(introMarks().filter(m => m >= 78).length);
+  await page.selectOption("#course", "Linear Algebra");
+  await expect(cutoffInput(page, "B")).toHaveValue("62");
+});
+
+test("#31 a new upload clears every course's cutoffs", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await typeCutoff(page, "A", 78);
+  // Picking the identical file again fires no "change" (see "Reviewed, not
+  // changed"), so load another file first, then the demo file again.
+  await upload(page, "valid_basic.xlsx");
+  await expect(page.locator("#course option")).toHaveCount(3);
+  await upload(page, "demo_marks.xlsx");
+  await page.waitForFunction(c => [...document.querySelectorAll("#course option")].some(o => o.value === c), INTRO);
+  await page.selectOption("#course", INTRO);
+  await expect(cutoffInput(page, "A")).toHaveValue("80");
+});

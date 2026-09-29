@@ -599,7 +599,10 @@ const CUTOFF_GRADES=["A","A-","B","B-","C","C-","D"];
 const DEFAULT_CUTOFFS={"A":80,"A-":70,"B":60,"B-":50,"C":40,"C-":30,"D":20};
 
 let data=[];
-let cutoffs={...DEFAULT_CUTOFFS}; // the one source of truth for grading
+let cutoffs={...DEFAULT_CUTOFFS}; // the open course's cutoffs: the one source of truth for grading
+// Per-course state for the life of the loaded file: switching course and back
+// keeps that course's cutoffs. A new upload starts a fresh map.
+let courseState=new Map(); // course name -> { cutoffs }
 let previousCounts=null;          // last announced counts (null = nothing to compare)
 let finalizeCount = 0;
 
@@ -638,6 +641,12 @@ function setCutoff(g,value){
 function gradeClass(g){ return "g-"+g.replace("-","m"); }
 
 function courseRows(){ return data.filter(d=>d.Course===course.value); }
+
+// A course's saved state, created with the default cutoffs on first visit.
+function stateFor(name){
+  if(!courseState.has(name)) courseState.set(name,{cutoffs:{...DEFAULT_CUTOFFS}});
+  return courseState.get(name);
+}
 
 // What the empty analysis area tells the user to do next.
 function updateEmptyState(){
@@ -757,6 +766,7 @@ function loadFile(f){
   // A new upload replaces the old one completely.
   data=[];
   loadedFileName="";
+  courseState=new Map();
   course.options.length=1; // keep only the placeholder option
   resetGradingView();
   uploadError.innerText="";
@@ -832,8 +842,8 @@ course.onchange=()=>{
   ctxCount.textContent=data.filter(d=>d.Course===course.value).length;
   document.body.classList.add("grading");
   startTimer();
-  cutoffs={...DEFAULT_CUTOFFS}; // each course starts from the defaults
-  previousCounts=null;           // opening a course is not a change to announce
+  cutoffs=stateFor(course.value).cutoffs; // defaults the first time, then as left
+  previousCounts=null;          // opening a course is not a change to announce
   buildCutoffEditor();
   reviewBtn.disabled=false;      // the editor cannot produce invalid ranges
   focusMark=null;
@@ -1027,7 +1037,7 @@ function render(){
 resetRanges.onclick=()=>{
   if(!grades.children.length) return; // no course open yet, so no cutoffs to reset
   if(!confirm("Reset all grade cutoffs to the defaults (A 80, A- 70, B 60, B- 50, C 40, C- 30, D 20)?")) return;
-  cutoffs={...DEFAULT_CUTOFFS};
+  Object.assign(cutoffs,DEFAULT_CUTOFFS); // in place: `cutoffs` is the course's saved object
   render();
 };
 
