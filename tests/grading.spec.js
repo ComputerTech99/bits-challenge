@@ -35,3 +35,8 @@ test("#2 course list is deduplicated and fully reset on re-upload", async ({ pag
   });
   expect(blank).toBe(true);
 });
+
+test("#3 file input accepts both .xlsx and .xls", async ({ page }) => {
+  const accept = (await page.locator("#file").getAttribute("accept")).split(",").map(s => s.trim());
+  expect(accept).toEqual(expect.arrayContaining([".xlsx", ".xls"]));
+});
