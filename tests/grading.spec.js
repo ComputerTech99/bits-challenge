@@ -1,7 +1,7 @@
 // Regression tests for the Stage 1 bug fixes. Test names reference the
 // row number in BUG_FIX_LOG.md.
 const { test, expect } = require("@playwright/test");
-const { openApp, upload, startGrading, stat, download, courseOptions, gradeCounts, setInstructor } = require("./helpers");
+const { openApp, upload, startGrading, stat, download, courseOptions, gradeCounts, setInstructor, cutoffInput, typeCutoff, rangeText } = require("./helpers");
 
 const XLSX = require("xlsx");
 const { fixture } = require("./helpers");
@@ -122,43 +122,56 @@ test("#7 decimal marks are rounded half-up and every student is exported", async
   await expect(page.locator(".file-guidance")).not.toContainText("80.2 → 81");
 });
 
-test("#8 bands must cover 0–100: A max below 100 is rejected", async ({ page }) => {
+test("#8 bands always cover 0–100: A ends at 100 even when a higher cutoff is typed", async ({ page }) => {
+  // Stage 2 (E1): the Min/Max selects are gone; A's top is fixed at 100 by construction.
   await startGrading(page, "valid_basic.xlsx", "CS F211");
-  await page.selectOption("#Amax", "95");
-  await expect(page.locator("#rangeError")).toContainText("A must end at 100");
-  await expect(page.locator("#download")).toBeDisabled();
+  await expect(rangeText(page, "A")).toHaveText("A: 80–100");
+  await typeCutoff(page, "A", 150);
+  await expect(cutoffInput(page, "A")).toHaveValue("100");
+  await expect(rangeText(page, "A")).toHaveText("A: 100–100");
+  await expect(page.locator("#download")).toBeEnabled();
+  const { text } = await download(page);
+  expect(text.trim().split("\n").slice(4)).toHaveLength(20); // nobody dropped
 });
 
-test("#8 bands must cover 0–100: E min above 0 is rejected", async ({ page }) => {
+test("#8 bands always cover 0–100: E starts at 0 and D cannot go below 1", async ({ page }) => {
   await startGrading(page, "valid_basic.xlsx", "CS F211");
-  await page.selectOption("#Emin", "5");
-  await expect(page.locator("#rangeError")).toContainText("E must start at 0");
-  await expect(page.locator("#download")).toBeDisabled();
+  await expect(page.locator("#cut-E")).toHaveCount(0); // E has no editable start
+  await expect(rangeText(page, "E")).toHaveText("E: 0–19");
+  await typeCutoff(page, "D", 0);
+  await expect(cutoffInput(page, "D")).toHaveValue("1");
+  await expect(rangeText(page, "E")).toHaveText("E: 0–0");
+  const { text } = await download(page);
+  expect(text).toContain("2023A7PS0001P,0,E\n");
 });
 
 test("#9 a single-mark band (A = 100–100) is valid", async ({ page }) => {
   await startGrading(page, "valid_basic.xlsx", "CS F211");
-  await page.selectOption("#Amin", "100"); // cascades A- max to 99
-  await expect(page.locator("#rangeError")).toBeEmpty();
+  await typeCutoff(page, "A", 100);
+  await expect(rangeText(page, "A")).toHaveText("A: 100–100");
+  await expect(rangeText(page, "A-")).toHaveText("A-: 70–99");
+  await expect(page.locator("#cutoffNote")).toBeEmpty(); // allowed, so no clamp note
   await expect(page.locator("#download")).toBeEnabled();
   const { text } = await download(page);
   expect(text).toContain("2023A7PS0006P,100,A\n");
   expect(text).toContain("2023A7PS0005P,80,A-\n");
 });
 
-test("#10 changing a Max moves the next-higher grade's Min", async ({ page }) => {
+test("#10 lowering a cutoff grows the band below's neighbour above it", async ({ page }) => {
+  // Stage 1 checked that a Max edit moved the next-higher Min; with one cutoff
+  // per boundary, both neighbouring ranges must follow any edit.
   await startGrading(page, "valid_basic.xlsx", "CS F211");
-  await page.selectOption("#Bmax", "72");
-  await expect(page.locator("#A-min")).toHaveValue("73");
-  await expect(page.locator("#rangeError")).toBeEmpty();
-  await expect(page.locator("#download")).toBeEnabled();
+  await typeCutoff(page, "A-", 75);
+  await expect(rangeText(page, "A")).toHaveText("A: 80–100");
+  await expect(rangeText(page, "A-")).toHaveText("A-: 75–79");
+  await expect(rangeText(page, "B")).toHaveText("B: 60–74");
 });
 
-test("#10 changing a Min still moves the next-lower grade's Max", async ({ page }) => {
+test("#10 raising a cutoff shrinks the band above it and grows the one below", async ({ page }) => {
   await startGrading(page, "valid_basic.xlsx", "CS F211");
-  await page.selectOption("#Bmin", "55");
-  await expect(page.locator("#B-max")).toHaveValue("54");
-  await expect(page.locator("#rangeError")).toBeEmpty();
+  await typeCutoff(page, "B", 55);
+  await expect(rangeText(page, "B")).toHaveText("B: 55–69");
+  await expect(rangeText(page, "B-")).toHaveText("B-: 50–54");
 });
 
 test("#11 timer starts on the first course selection, not on page load", async ({ page }) => {
@@ -318,26 +331,24 @@ test("#15 export is blocked inline when the instructor name is empty", async ({ 
   expect(text).toMatch(/^Instructor,Dr Rao\n/);
 });
 
-test("#16 lift and pulse classes stay on for the 250ms transition", async ({ page }) => {
-  await pausedClock(page);
+test("#16 a grade-count change is announced once via aria-live", async ({ page }) => {
+  // Stage 2: the lift/pulse animations are gone (design system); the guarantee
+  // they gave, "count changes are noticeable", is now an aria-live announcement.
   await startGrading(page, "valid_basic.xlsx", "CS F211");
-  await page.selectOption("#Amin", "90"); // moves students from A to A-
-  await page.clock.runFor(100);
-  await expect(page.locator(".grade.lift")).toHaveCount(1);
-  await expect(page.locator(".grade-summary span.pulse")).not.toHaveCount(0);
-  await page.clock.runFor(200);
-  await expect(page.locator(".grade.lift")).toHaveCount(0);
-  await expect(page.locator(".grade-summary span.pulse")).toHaveCount(0);
+  await expect(page.locator("#liveRegion")).toHaveAttribute("aria-live", "polite");
+  await typeCutoff(page, "A", 90); // CS F211 A marks are 80, 97, 99, 100, 100: only the 80 drops
+  await expect(page.locator("#liveRegion")).toHaveText("Grade counts changed: A from 5 to 4, A- from 2 to 3.");
+  await typeCutoff(page, "C-", 31); // nobody scores 30 in this course: no count changes
+  await expect(page.locator("#liveRegion")).toHaveText("Grade counts changed: A from 5 to 4, A- from 2 to 3.");
 });
 
-test("#17 switching course does not pulse the summary chips", async ({ page }) => {
+test("#17 switching course announces no spurious count change", async ({ page }) => {
   await startGrading(page, "valid_basic.xlsx", "CS F211");
-  await page.waitForTimeout(500);
+  await typeCutoff(page, "A", 90);
+  await expect(page.locator("#liveRegion")).not.toBeEmpty();
   await page.selectOption("#course", "MATH F112");
-  // Read once, immediately: a retrying assertion would just wait out the 250ms pulse.
-  const classes = await page.locator(".grade-summary span").evaluateAll(s => s.map(x => x.className));
-  expect(classes).toHaveLength(8);
-  expect(classes.filter(c => c.includes("pulse"))).toEqual([]);
+  await expect(page.locator("#gradeSummary tr")).toHaveCount(8);
+  await expect(page.locator("#liveRegion")).toBeEmpty();
 });
 
 test("#18 attempt ordinals are correct (21st, 22nd, 23rd, 11th–13th)", async ({ page }) => {
@@ -350,23 +361,23 @@ test("#18 attempt ordinals are correct (21st, 22nd, 23rd, 11th–13th)", async (
   }
 });
 
-test("#19 Reset Range asks for confirmation once", async ({ page }) => {
+test("#19 Reset cutoffs asks for confirmation once", async ({ page }) => {
   await startGrading(page, "valid_basic.xlsx", "CS F211");
-  await page.selectOption("#Amin", "90");
+  await typeCutoff(page, "A", 90);
   const dialogs = [];
   page.on("dialog", d => { dialogs.push(d.message()); d.accept(); });
   await page.click("#resetRanges");
-  await expect(page.locator("#Amin")).toHaveValue("80");
-  await expect(page.locator("#A-max")).toHaveValue("79");
+  await expect(cutoffInput(page, "A")).toHaveValue("80");
+  await expect(rangeText(page, "A-")).toHaveText("A-: 70–79");
   expect(dialogs).toHaveLength(1);
 });
 
-test("#19 dismissing the confirmation leaves the ranges alone", async ({ page }) => {
+test("#19 dismissing the confirmation leaves the cutoffs alone", async ({ page }) => {
   await startGrading(page, "valid_basic.xlsx", "CS F211");
-  await page.selectOption("#Amin", "90");
+  await typeCutoff(page, "A", 90);
   page.on("dialog", d => d.dismiss());
   await page.click("#resetRanges");
-  await expect(page.locator("#Amin")).toHaveValue("90");
+  await expect(cutoffInput(page, "A")).toHaveValue("90");
 });
 
 test("#20 upload uses readAsArrayBuffer, not the deprecated readAsBinaryString", async ({ page }) => {
@@ -388,14 +399,17 @@ test("#21 SheetJS is loaded from the pinned 0.18.5 URL", async ({ page }) => {
   expect(srcs).toEqual(["https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"]);
 });
 
-test("#22 Reset Range before a course is open does nothing and does not throw", async ({ page }) => {
+test("#22 Reset cutoffs is inert before a course is open", async ({ page }) => {
+  // Stage 2: the button is disabled until there are cutoffs to reset.
   const errors = [], dialogs = [];
   page.on("pageerror", e => errors.push(e.message));
   page.on("dialog", d => { dialogs.push(d.message()); d.accept(); });
-  await page.click("#resetRanges");            // fresh page
-  await upload(page, "valid_basic.xlsx");      // courses loaded, none selected
+  await expect(page.locator("#resetRanges")).toBeDisabled();
+  await page.click("#resetRanges", { force: true }); // fresh page
+  await upload(page, "valid_basic.xlsx");            // courses loaded, none selected
   await expect(page.locator("#course option")).toHaveCount(3);
-  await page.click("#resetRanges");
+  await expect(page.locator("#resetRanges")).toBeDisabled();
+  await page.click("#resetRanges", { force: true });
   await page.waitForTimeout(200);
   expect(errors).toEqual([]);
   expect(dialogs).toEqual([]);
@@ -451,17 +465,16 @@ test("#25 an unreadable file shows an inline error instead of throwing", async (
   expect(await courseOptions(page)).toEqual([""]);
 });
 
-test("happy path: upload, select course, adjust a range, export the right grades", async ({ page }) => {
+test("happy path: upload, select course, adjust a cutoff, export the right grades", async ({ page }) => {
   await startGrading(page, "valid_basic.xlsx", "CS F211");
   // Stage 2: the name is shown as typed, not upper-cased.
   await expect(page.locator("#welcome")).toHaveText("Welcome, Dr Rao. Review the cutoffs, then finalize the grades.");
-  await expect(page.locator("#grades .grade")).toHaveCount(8);
+  await expect(page.locator("#grades input[type=number]")).toHaveCount(7);
   await expect(page.locator("#download")).toBeEnabled();
 
-  // Raise the A cut-off to 85; A- max should follow to 84.
-  await page.selectOption("#Amin", "85");
-  await expect(page.locator("#A-max")).toHaveValue("84");
-  await expect(page.locator("#rangeError")).toBeEmpty();
+  // Raise the A cutoff to 85; A- now ends at 84.
+  await typeCutoff(page, "A", 85);
+  await expect(rangeText(page, "A-")).toHaveText("A-: 70–84");
 
   // Expected grades computed independently from the fixture.
   const bands = [["A", 85], ["A-", 70], ["B", 60], ["B-", 50], ["C", 40], ["C-", 30], ["D", 20], ["E", 0]];
@@ -473,7 +486,7 @@ test("happy path: upload, select course, adjust a range, export the right grades
   });
   const counts = Object.fromEntries(bands.map(([g]) => [g, 0]));
   expectedLines.forEach(l => counts[l.split(",")[2]]++);
-  await expect(page.locator("#gradeSummary")).toHaveText(bands.map(([g]) => `${g}: ${counts[g]}`).join(""));
+  expect(await gradeCounts(page)).toEqual(counts);
 
   const { filename, text } = await download(page);
   expect(filename).toMatch(/^grades_CS_F211_\d{4}-\d{2}-\d{2}\.csv$/);
@@ -681,4 +694,76 @@ test("app bar shows instructor, course, class size and timer only once grading s
   await expect(page.locator("#ctxCourse")).toHaveText("Introduction to Programming");
   await expect(page.locator("#ctxCount")).toHaveText("64");
   await expect(page.locator("#timerText")).toBeVisible();
+});
+
+// ===== E1: cutoff editor =====
+
+test("E1: default derived ranges cover 0–100 with no gaps", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", "Introduction to Programming");
+  const expected = { A: "80–100", "A-": "70–79", B: "60–69", "B-": "50–59", C: "40–49", "C-": "30–39", D: "20–29", E: "0–19" };
+  for (const [g, r] of Object.entries(expected)) await expect(rangeText(page, g)).toHaveText(`${g}: ${r}`);
+  await expect(page.locator("#changeCount")).toHaveText("Default cutoffs");
+});
+
+test("E1: an out-of-range cutoff clamps on blur and says so", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", "Introduction to Programming");
+  await typeCutoff(page, "A-", 95); // must stay below A (80)
+  await expect(cutoffInput(page, "A-")).toHaveValue("79");
+  await expect(page.locator("#cutoffNote")).toHaveText("A- must start between 61 and 79, so it was set to 79.");
+  await typeCutoff(page, "B", 12); // must stay above B- (50)
+  await expect(cutoffInput(page, "B")).toHaveValue("51");
+  await expect(rangeText(page, "B-")).toHaveText("B-: 50–50");
+});
+
+test("E1: clearing a cutoff restores its value on blur", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", "Introduction to Programming");
+  await typeCutoff(page, "C", "");
+  await expect(cutoffInput(page, "C")).toHaveValue("40");
+  await expect(page.locator("#cutoffNote")).toContainText("C must start between");
+});
+
+test("E1: arrow keys step a cutoff and apply immediately", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", "Introduction to Programming");
+  await cutoffInput(page, "A").focus();
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+  await expect(cutoffInput(page, "A")).toHaveValue("78");
+  await expect(rangeText(page, "A-")).toHaveText("A-: 70–77"); // applied without leaving the field
+  await page.keyboard.press("ArrowUp");
+  await expect(rangeText(page, "A")).toHaveText("A: 79–100");
+});
+
+test("E1: − / + buttons step within bounds and disable at the limit", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", "Introduction to Programming");
+  const row = page.locator(".cutoff-row", { has: cutoffInput(page, "A") });
+  const lower = row.getByRole("button", { name: "Lower the A cutoff by 1" });
+  const raise = row.getByRole("button", { name: "Raise the A cutoff by 1" });
+  await raise.click();
+  await expect(cutoffInput(page, "A")).toHaveValue("81");
+  await typeCutoff(page, "A", 100);
+  await expect(raise).toBeDisabled();        // A cannot start above 100
+  await typeCutoff(page, "A-", 99);
+  await expect(page.locator(".cutoff-row", { has: cutoffInput(page, "A-") })
+    .getByRole("button", { name: "Raise the A- cutoff by 1" })).toBeDisabled(); // touching A
+  await expect(lower).toBeDisabled();        // A at 100 can't go below A- + 1 = 100
+});
+
+test("E1: the action bar counts cutoffs changed from default", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", "Introduction to Programming");
+  await expect(page.locator("#resetRanges")).toBeDisabled();
+  await typeCutoff(page, "A", 78);
+  await expect(page.locator("#changeCount")).toHaveText("1 cutoff changed from default");
+  await typeCutoff(page, "B-", 52);
+  await expect(page.locator("#changeCount")).toHaveText("2 cutoffs changed from default");
+  await typeCutoff(page, "A", 80);
+  await expect(page.locator("#changeCount")).toHaveText("1 cutoff changed from default");
+  await expect(page.locator("#resetRanges")).toBeEnabled();
+});
+
+test("golden: modified cutoffs (A 78, B- 52) export byte-identical to Stage 1", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", "Introduction to Programming");
+  await typeCutoff(page, "A", 78);
+  await typeCutoff(page, "B-", 52);
+  const { bytes } = await download(page);
+  expect(bytes.equals(require("fs").readFileSync(require("path").join(GOLDEN, "intro_A78_Bminus52.csv")))).toBe(true);
 });

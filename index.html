@@ -201,34 +201,76 @@ button:disabled{opacity:.45;cursor:not-allowed}
 }
 .stat b{font-size:16px;font-weight:600;color:var(--ink)}
 
-.grade-summary{
-  display:flex;
-  flex-direction:column;
-  gap:4px;
-  font-size:14px;
-}
-.grade-summary span{
-  padding:4px 8px;
-  border-radius:var(--radius-control);
-  transition:transform .25s ease, background-color .25s ease;
+/* ===== GRADE RAMP (text colours meet WCAG AA) ===== */
+.g-A{background:var(--g-A);color:#fff}   .g-Am{background:var(--g-Am);color:#fff}
+.g-B{background:var(--g-B);color:#fff}   .g-Bm{background:var(--g-Bm);color:#fff}
+.g-C{background:var(--g-C);color:var(--ink)} .g-Cm{background:var(--g-Cm);color:var(--ink)}
+.g-D{background:var(--g-D);color:var(--ink)} .g-E{background:var(--g-E);color:var(--ink)}
+.chip{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:32px;
+  height:24px;
+  padding:0 8px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:600;
 }
 
-.grade-grid{
+/* ===== CUTOFF EDITOR ===== */
+.cutoffs{margin-top:24px}
+.cutoffs h3{font-size:14px;color:var(--ink)}
+.cutoffs .help{margin-top:4px}
+.cutoff-list{
   display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(140px,1fr));
-  gap:8px;
-  margin-top:16px;
+  /* Two columns only when each row fits (label + stepper + range ≈ 340px). */
+  grid-template-columns:repeat(auto-fill,minmax(340px,1fr));
+  gap:8px 24px;
+  margin-top:12px;
 }
-.grade{
-  display:flex;
-  flex-direction:column;
-  gap:4px;
-  border:1px solid var(--rule);
-  border-radius:var(--radius-control);
-  padding:8px;
-  transition:transform .25s ease, box-shadow .25s ease;
+.cutoff-row{
+  display:grid;
+  grid-template-columns:80px auto 1fr;
+  align-items:center;
+  gap:8px 12px;
 }
-.grade .min,.grade .max{display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--ink-muted)}
+.cutoff-row label,.cutoff-row .fixed-label{display:flex;align-items:center;gap:6px;white-space:nowrap;font-weight:500}
+.cutoff-row .range{color:var(--ink-muted);white-space:nowrap}
+.stepper{display:flex;align-items:center;gap:4px}
+.stepper input{width:56px;text-align:center;padding:0 4px;-moz-appearance:textfield}
+.stepper input::-webkit-inner-spin-button,.stepper input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.step{
+  width:40px;
+  padding:0;
+  background:var(--surface);
+  border-color:var(--rule);
+  color:var(--ink);
+  font-size:18px;
+  line-height:1;
+}
+.fixed-value{width:144px;text-align:center;color:var(--ink-muted)}
+.note{margin:8px 0 0;font-size:12px;color:var(--ink-muted);min-height:18px}
+
+/* ===== DISTRIBUTION TABLE ===== */
+.dist{width:100%;border-collapse:collapse;font-size:14px}
+.dist th,.dist td{padding:6px 4px;text-align:left;border-bottom:1px solid var(--rule)}
+.dist thead th{font-size:12px;font-weight:500;color:var(--ink-muted)}
+.dist tbody tr:last-child th,.dist tbody tr:last-child td{border-bottom:none}
+.dist .n{text-align:right}
+.dist td.n b{font-weight:600}
+.change-count{font-size:14px;color:var(--ink-muted)}
+.change-count b{color:var(--ink);font-weight:600}
+
+.visually-hidden{
+  position:absolute!important;
+  width:1px;height:1px;
+  margin:-1px;padding:0;
+  overflow:hidden;
+  clip:rect(0 0 0 0);
+  white-space:nowrap;
+  border:0;
+}
 
 .error{
   color:var(--danger);
@@ -271,20 +313,13 @@ body.grading .empty-state{display:none}
 .actionbar-status{display:flex;flex-direction:column;gap:4px;min-width:0}
 .actions{display:flex;gap:8px;margin-left:auto}
 
-/* ===== ANIMATIONS ===== */
-.grade.lift{
-  transform:translateY(-2px);
-  box-shadow:0 8px 20px rgba(0,0,0,.12);
-}
-.grade-summary span.pulse{
-  transform:scale(1.04);
-  background:var(--g-E);
-}
-
 /* ===== RESPONSIVE ===== */
 @media (max-width:1023px){
   .workspace{grid-template-columns:minmax(0,1fr)}
   .controls{grid-template-columns:1fr}
+}
+@media (max-width:420px){
+  .cutoff-list{grid-template-columns:minmax(0,1fr)}
 }
 @media (max-width:600px){
   .appbar,.container,.actionbar-inner{padding-left:16px;padding-right:16px}
@@ -360,8 +395,12 @@ body.grading .empty-state{display:none}
     <h2 id="analysisHeading">Distribution and cutoffs</h2>
     <canvas id="hist" width="380" height="240"></canvas>
 
-    <div class="grade-grid" id="grades"></div>
-    <div class="error" id="rangeError"></div>
+    <div class="cutoffs" role="group" aria-labelledby="cutoffsHeading">
+      <h3 id="cutoffsHeading">Grade cutoffs</h3>
+      <p class="help">Each grade starts at its cutoff and runs up to the next one. A always ends at 100 and E always starts at 0.</p>
+      <div class="cutoff-list" id="grades"></div>
+      <p class="note" id="cutoffNote" aria-live="polite"></p>
+    </div>
 
     <div class="stats">
       <div class="stat">Min<b id="min"></b></div>
@@ -374,21 +413,28 @@ body.grading .empty-state{display:none}
   <div class="side">
     <section class="panel" aria-labelledby="distributionHeading">
       <h2 id="distributionHeading">Grade distribution</h2>
-      <div class="grade-summary" id="gradeSummary"></div>
+      <table class="dist">
+        <thead><tr><th scope="col">Grade</th><th scope="col">Range</th><th scope="col" class="n">Students</th><th scope="col" class="n">Share</th></tr></thead>
+        <tbody id="gradeSummary"></tbody>
+      </table>
     </section>
   </div>
 </div>
 
 </main>
 
+<!-- Screen-reader announcements of grade-count changes. -->
+<div id="liveRegion" class="visually-hidden" aria-live="polite"></div>
+
 <div class="actionbar">
   <div class="actionbar-inner">
     <div class="actionbar-status">
+      <div class="change-count" id="changeCount"></div>
       <div class="error" id="exportError"></div>
       <div id="thankyou" class="notice"></div>
     </div>
     <div class="actions">
-      <button class="secondary" id="resetRanges">Reset Range</button>
+      <button class="secondary" id="resetRanges" disabled>Reset cutoffs</button>
       <button id="download" disabled>Finalize & Download</button>
     </div>
   </div>
@@ -427,17 +473,51 @@ function resetTimer(){
 }
 
 const GRADES=["A","A-","B","B-","C","C-","D","E"];
-const DEFAULTS={
-  "A":[80,100],"A-":[70,79],"B":[60,69],"B-":[50,59],
-  "C":[40,49],"C-":[30,39],"D":[20,29],"E":[0,19]
-};
-
-// How long .lift / .pulse stay applied; matches their .25s CSS transitions.
-const HIGHLIGHT_MS=250;
+// Bands are continuous, so 7 numbers describe them: each grade's lowest mark.
+// A always ends at 100 and E always starts at 0, so E has no cutoff.
+const CUTOFF_GRADES=["A","A-","B","B-","C","C-","D"];
+const DEFAULT_CUTOFFS={"A":80,"A-":70,"B":60,"B-":50,"C":40,"C-":30,"D":20};
 
 let data=[];
-let previousSummary={};
+let cutoffs={...DEFAULT_CUTOFFS}; // the one source of truth for grading
+let previousCounts=null;          // last announced counts (null = nothing to compare)
 let finalizeCount = 0;
+
+// THE grading rule. Counts, chart, borderline list and export all use it.
+function gradeFor(mark){
+  for(const g of CUTOFF_GRADES) if(mark>=cutoffs[g]) return g;
+  return "E";
+}
+
+// [from, to] of a grade's band, derived from the cutoffs.
+function bandRange(g){
+  const i=GRADES.indexOf(g);
+  const from=g==="E" ? 0 : cutoffs[g];
+  const to=i===0 ? 100 : cutoffs[GRADES[i-1]]-1;
+  return [from,to];
+}
+
+// Where a cutoff may go: above the next-lower cutoff and below the next-higher
+// one, so every band keeps at least one mark (D >= 1 keeps E = 0 at minimum).
+function cutoffBounds(g){
+  const i=CUTOFF_GRADES.indexOf(g);
+  const lo=i===CUTOFF_GRADES.length-1 ? 1 : cutoffs[CUTOFF_GRADES[i+1]]+1;
+  const hi=i===0 ? 100 : cutoffs[CUTOFF_GRADES[i-1]]-1;
+  return [lo,hi];
+}
+
+// The only way cutoffs change: clamp into bounds, then redraw. Returns the value used.
+function setCutoff(g,value){
+  const [lo,hi]=cutoffBounds(g);
+  cutoffs[g]=Math.min(hi,Math.max(lo,Math.round(value)));
+  render();
+  return cutoffs[g];
+}
+
+// CSS class for a grade's ramp colour ("A-" -> "g-Am").
+function gradeClass(g){ return "g-"+g.replace("-","m"); }
+
+function courseRows(){ return data.filter(d=>d.Course===course.value); }
 
 // What the empty analysis area tells the user to do next.
 function updateEmptyState(){
@@ -450,15 +530,17 @@ function updateEmptyState(){
 function resetGradingView(){
   document.body.classList.remove("grading");
   grades.innerHTML="";
-  rangeError.innerText="";
+  cutoffNote.textContent="";
   gradeSummary.innerHTML="";
+  liveRegion.textContent="";
+  changeCount.textContent="";
+  resetRanges.disabled=true;
   welcome.innerText="";
   setup.classList.remove("collapsed"); // no course open: show the full setup
   ["min","max","avg","med"].forEach(id=>document.getElementById(id).textContent="—");
   cancelAnimationFrame(histFrame);
   hist.getContext("2d").clearRect(0,0,380,240);
   download.disabled=true;
-  download.classList.remove("enabled");
   // Timer, attempt count and messages belong to one course.
   resetTimer();
   finalizeCount=0;
@@ -632,106 +714,130 @@ course.onchange=()=>{
   ctxCount.textContent=data.filter(d=>d.Course===course.value).length;
   document.body.classList.add("grading");
   startTimer();
-  previousSummary={}; // a new course is not a change to pulse about
-  buildGradeUI();
-  updateAll();
+  cutoffs={...DEFAULT_CUTOFFS}; // each course starts from the defaults
+  previousCounts=null;           // opening a course is not a change to announce
+  buildCutoffEditor();
+  download.disabled=false;       // the editor cannot produce invalid ranges
+  drawHistogram();
+  render();
 };
 
-function cascadeMaxFrom(index){
-  for(let i=index+1;i<GRADES.length;i++){
-    const prevMin=+document.getElementById(GRADES[i-1]+"min").value;
-    document.getElementById(GRADES[i]+"max").value=prevMin-1;
-  }
-}
-
-// Mirror of cascadeMaxFrom: a Max change moves the next-higher grade's Min.
-function cascadeMinFrom(index){
-  if(index===0) return; // A has no higher grade
-  const max=+document.getElementById(GRADES[index]+"max").value;
-  document.getElementById(GRADES[index-1]+"min").value=max+1;
-}
-
-function buildGradeUI(){
+// One row per cutoff: label, − / number / + and the derived range. E is fixed.
+function buildCutoffEditor(){
   grades.innerHTML="";
-  GRADES.forEach((g,idx)=>{
-    const card=document.createElement("div");
-    card.className="grade";
-
-    const minSel=document.createElement("select");
-    const maxSel=document.createElement("select");
-
-    for(let i=0;i<=100;i++){
-      minSel.add(new Option(i,i,i===DEFAULTS[g][0],i===DEFAULTS[g][0]));
-      maxSel.add(new Option(i,i,i===DEFAULTS[g][1],i===DEFAULTS[g][1]));
-    }
-
-    minSel.id=g+"min";
-    maxSel.id=g+"max";
-
-    minSel.onchange=()=>{
-      card.classList.add("lift");
-      setTimeout(()=>card.classList.remove("lift"),HIGHLIGHT_MS);
-      cascadeMaxFrom(idx);
-      updateAll();
-    };
-
-    maxSel.onchange=()=>{
-      card.classList.add("lift");
-      setTimeout(()=>card.classList.remove("lift"),HIGHLIGHT_MS);
-      cascadeMinFrom(idx);
-      updateAll();
-    };
-
-    card.innerHTML=`<strong>${g}</strong><div class="min">Min</div>`;
-    card.querySelector(".min").appendChild(minSel);
-
-    const maxDiv=document.createElement("div");
-    maxDiv.className="max";
-    maxDiv.innerText="Max";
-    maxDiv.appendChild(maxSel);
-    card.appendChild(maxDiv);
-
-    grades.appendChild(card);
+  CUTOFF_GRADES.forEach(g=>{
+    const id="cut-"+g.replace("-","m");
+    const row=document.createElement("div");
+    row.className="cutoff-row";
+    row.innerHTML=`
+      <label for="${id}"><span class="chip ${gradeClass(g)}">${g}</span> from</label>
+      <div class="stepper">
+        <button type="button" class="step" data-step="-1" aria-label="Lower the ${g} cutoff by 1">−</button>
+        <input id="${id}" type="number" inputmode="numeric" step="1">
+        <button type="button" class="step" data-step="1" aria-label="Raise the ${g} cutoff by 1">+</button>
+      </div>
+      <span class="range num" id="range-${g.replace("-","m")}"></span>`;
+    const input=row.querySelector("input");
+    row.querySelectorAll(".step").forEach(b=>{
+      b.onclick=()=>setCutoff(g,cutoffs[g]+Number(b.dataset.step));
+    });
+    // Arrow keys and valid typing apply immediately; anything else waits for blur.
+    input.addEventListener("input",()=>{
+      const v=Number(input.value), [lo,hi]=cutoffBounds(g);
+      if(input.value!=="" && Number.isInteger(v) && v>=lo && v<=hi && v!==cutoffs[g]) setCutoff(g,v);
+    });
+    // On blur/Enter: clamp out-of-range or non-numbers and say what happened.
+    input.addEventListener("change",()=>{
+      const v=Number(input.value), [lo,hi]=cutoffBounds(g);
+      if(input.value!=="" && Number.isInteger(v) && v>=lo && v<=hi){ setCutoff(g,v); return; }
+      const used=setCutoff(g,Number.isFinite(v) && input.value!=="" ? v : cutoffs[g]);
+      showCutoffNote(`${g} must start between ${lo} and ${hi}, so it was set to ${used}.`);
+    });
+    grades.appendChild(row);
   });
+  const e=document.createElement("div");
+  e.className="cutoff-row";
+  e.innerHTML=`<span class="fixed-label"><span class="chip g-E">E</span> from</span>
+    <span class="fixed-value">0 (fixed)</span><span class="range num" id="range-E"></span>`;
+  grades.appendChild(e);
+}
+
+let noteTimer=null;
+function showCutoffNote(text){
+  cutoffNote.textContent=text;
+  clearTimeout(noteTimer);
+  noteTimer=setTimeout(()=>{ cutoffNote.textContent=""; },5000);
+}
+
+// Keeps the editor in step with `cutoffs`: values, allowed range, ranges shown.
+function updateCutoffEditor(){
+  CUTOFF_GRADES.forEach(g=>{
+    const key=g.replace("-","m"), [lo,hi]=cutoffBounds(g);
+    const input=document.getElementById("cut-"+key);
+    if(document.activeElement!==input || Number(input.value)!==cutoffs[g]) input.value=cutoffs[g];
+    input.min=lo; input.max=hi;
+    const [down,up]=input.parentElement.querySelectorAll(".step");
+    down.disabled=cutoffs[g]<=lo;
+    up.disabled=cutoffs[g]>=hi;
+  });
+  GRADES.forEach(g=>{
+    const [from,to]=bandRange(g);
+    document.getElementById("range-"+g.replace("-","m")).textContent=`${g}: ${from}–${to}`;
+  });
+}
+
+function countGrades(rows){
+  const counts={}; GRADES.forEach(g=>counts[g]=0);
+  rows.forEach(d=>counts[gradeFor(d["Total Marks"])]++);
+  return counts;
+}
+
+// Screen readers hear which counts changed after a cutoff edit (not on course open).
+function announceCounts(counts){
+  if(previousCounts){
+    const changed=GRADES.filter(g=>counts[g]!==previousCounts[g])
+      .map(g=>`${g} from ${previousCounts[g]} to ${counts[g]}`);
+    if(changed.length) liveRegion.textContent=`Grade counts changed: ${changed.join(", ")}.`;
+  }
+  previousCounts=counts;
+}
+
+function renderDistribution(counts,total){
+  gradeSummary.innerHTML="";
+  GRADES.forEach(g=>{
+    const [from,to]=bandRange(g);
+    const share=total ? (100*counts[g]/total).toFixed(1)+"%" : "—";
+    const tr=document.createElement("tr");
+    tr.dataset.grade=g;
+    tr.innerHTML=`<th scope="row"><span class="chip ${gradeClass(g)}">${g}</span></th>
+      <td class="num">${from}–${to}</td><td class="n num"><b>${counts[g]}</b></td><td class="n num">${share}</td>`;
+    gradeSummary.appendChild(tr);
+  });
+}
+
+function updateChangeCount(){
+  const n=CUTOFF_GRADES.filter(g=>cutoffs[g]!==DEFAULT_CUTOFFS[g]).length;
+  changeCount.innerHTML=n ? `<b>${n}</b> ${n===1?"cutoff":"cutoffs"} changed from default` : "Default cutoffs";
+  resetRanges.disabled=n===0;
+}
+
+// Recomputes everything that depends on the cutoffs.
+function render(){
+  const rows=courseRows();
+  const counts=countGrades(rows);
+  updateCutoffEditor();
+  renderDistribution(counts,rows.length);
+  announceCounts(counts);
+  computeStats();
+  updateChangeCount();
 }
 
 resetRanges.onclick=()=>{
-  if(!grades.children.length) return; // no course open yet, so no ranges to reset
-  if(!confirm("This will reset all grade ranges to the default values.\nDo you want to continue?")) return;
-  GRADES.forEach(g=>{
-    document.getElementById(g+"min").value=DEFAULTS[g][0];
-    document.getElementById(g+"max").value=DEFAULTS[g][1];
-  });
-  updateAll();
+  if(!grades.children.length) return; // no course open yet, so no cutoffs to reset
+  if(!confirm("Reset all grade cutoffs to the defaults (A 80, A- 70, B 60, B- 50, C 40, C- 30, D 20)?")) return;
+  cutoffs={...DEFAULT_CUTOFFS};
+  render();
 };
-
-function validateRanges(){
-  // The bands must cover the whole 0–100 scale or some students get no grade.
-  if(+document.getElementById("Amax").value!==100) return "Grade A must end at 100.";
-  if(+document.getElementById("Emin").value!==0) return "Grade E must start at 0.";
-  for(let i=0;i<GRADES.length;i++){
-    const g=GRADES[i];
-    const minV=+document.getElementById(g+"min").value;
-    const maxV=+document.getElementById(g+"max").value;
-    if(minV>maxV) return "Each grade must have Min ≤ Max.";
-    if(i>0){
-      const prevMin=+document.getElementById(GRADES[i-1]+"min").value;
-      if(maxV!==prevMin-1) return "Grade ranges must be continuous with no gaps or overlaps.";
-    }
-  }
-  return "";
-}
-
-function updateAll(){
-  const err=validateRanges();
-  rangeError.innerText=err;
-  download.disabled=!!err;
-  if(!err) download.classList.add("enabled");
-  else download.classList.remove("enabled");
-  drawHistogram();
-  computeStats();
-  computeGradeSummary();
-}
 
 // Histogram geometry: bar i is drawn at x = 30+i*32, 24px wide, on a baseline
 // at y = 210. The tallest bar is BAR_AREA px high.
@@ -817,30 +923,6 @@ function computeStats(){
     :(m[m.length/2-1]+m[m.length/2])/2;
 }
 
-function computeGradeSummary(){
-  let counts={}; GRADES.forEach(g=>counts[g]=0);
-  data.filter(d=>d.Course===course.value).forEach(d=>{
-    for(const g of GRADES){
-      const mi=+document.getElementById(g+"min").value;
-      const ma=+document.getElementById(g+"max").value;
-      if(d["Total Marks"]>=mi && d["Total Marks"]<=ma){
-        counts[g]++; break;
-      }
-    }
-  });
-  gradeSummary.innerHTML="";
-  GRADES.forEach(g=>{
-    const span=document.createElement("span");
-    span.textContent=`${g}: ${counts[g]}`;
-    if(previousSummary[g]!==undefined && previousSummary[g]!==counts[g]){
-      span.classList.add("pulse");
-      setTimeout(()=>span.classList.remove("pulse"),HIGHLIGHT_MS);
-    }
-    gradeSummary.appendChild(span);
-    previousSummary[g]=counts[g];
-  });
-}
-
 // RFC 4180: quote a field containing a comma, quote or line break, and
 // double any quotes inside it. Values starting with = + - @ tab or CR would
 // run as formulas in Excel, so they get a leading ' first (OWASP guidance).
@@ -889,15 +971,8 @@ download.onclick=()=>{
   const secT=Math.floor((elapsed%60000)/1000);
 
   let csv=`Instructor,${csvField(instructor.value)}\nCourse,${csvField(course.value)}\n\nBITS ID,Total Marks,Grade\n`;
-  data.filter(d=>d.Course===course.value).forEach(d=>{
-    for(const g of GRADES){
-      const mi=+document.getElementById(g+"min").value;
-      const ma=+document.getElementById(g+"max").value;
-      if(d["Total Marks"]>=mi && d["Total Marks"]<=ma){
-        csv+=`${csvField(d["BITS ID"])},${d["Total Marks"]},${g}\n`;
-        break;
-      }
-    }
+  courseRows().forEach(d=>{
+    csv+=`${csvField(d["BITS ID"])},${d["Total Marks"]},${gradeFor(d["Total Marks"])}\n`;
   });
 
   const a=document.createElement("a");

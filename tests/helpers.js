@@ -60,10 +60,22 @@ async function setInstructor(page, name) {
   await page.fill("#instructor", name);
 }
 
-// Per-grade student counts as shown in the grade distribution, e.g. { A: 8, "A-": 17, ... }.
-async function gradeCounts(page) {
-  const texts = await page.locator("#gradeSummary span").allTextContents();
-  return Object.fromEntries(texts.map(t => { const [g, n] = t.split(":"); return [g.trim(), Number(n)]; }));
+// Type a cutoff ("A-", 75) and leave the field, as a user would to commit it.
+function cutoffInput(page, grade) {
+  return page.locator(`#cut-${grade.replace("-", "m")}`);
+}
+async function typeCutoff(page, grade, value) {
+  await cutoffInput(page, grade).fill(String(value));
+  await cutoffInput(page, grade).press("Tab");
+}
+function rangeText(page, grade) {
+  return page.locator(`#range-${grade.replace("-", "m")}`);
 }
 
-module.exports = { openApp, fixture, upload, startGrading, stat, download, courseOptions, gradeCounts, setInstructor };
+// Per-grade student counts as shown in the grade distribution, e.g. { A: 8, "A-": 17, ... }.
+async function gradeCounts(page) {
+  return page.locator("#gradeSummary tr").evaluateAll(rows =>
+    Object.fromEntries(rows.map(r => [r.dataset.grade, Number(r.querySelector("td b").textContent)])));
+}
+
+module.exports = { openApp, fixture, upload, startGrading, stat, download, courseOptions, gradeCounts, setInstructor, cutoffInput, typeCutoff, rangeText };
