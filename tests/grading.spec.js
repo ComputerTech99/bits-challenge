@@ -3,6 +3,9 @@
 const { test, expect } = require("@playwright/test");
 const { openApp, upload, startGrading, stat, download, courseOptions } = require("./helpers");
 
+const XLSX = require("xlsx");
+const { fixture } = require("./helpers");
+
 test.beforeEach(async ({ page }) => {
   await openApp(page);
 });
@@ -427,4 +430,36 @@ test("#25 an unreadable file shows an inline error instead of throwing", async (
   await expect(page.locator("#uploadError")).toContainText("could not be read");
   expect(errors).toEqual([]);
   expect(await courseOptions(page)).toEqual([""]);
+});
+
+test("happy path: upload, select course, adjust a range, export the right grades", async ({ page }) => {
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
+  await expect(page.locator("#welcome")).toHaveText("Welcome DR RAO. Please review and finalize grading.");
+  await expect(page.locator("#grades .grade")).toHaveCount(8);
+  await expect(page.locator("#download")).toBeEnabled();
+
+  // Raise the A cut-off to 85; A- max should follow to 84.
+  await page.selectOption("#Amin", "85");
+  await expect(page.locator("#A-max")).toHaveValue("84");
+  await expect(page.locator("#rangeError")).toBeEmpty();
+
+  // Expected grades computed independently from the fixture.
+  const bands = [["A", 85], ["A-", 70], ["B", 60], ["B-", 50], ["C", 40], ["C-", 30], ["D", 20], ["E", 0]];
+  const rows = XLSX.utils.sheet_to_json(XLSX.readFile(fixture("valid_basic.xlsx")).Sheets.Marks)
+    .filter(r => r.Course === "CS F211");
+  const expectedLines = rows.map(r => {
+    const grade = bands.find(([, min]) => r["Total Marks"] >= min)[0];
+    return `${r["BITS ID"]},${r["Total Marks"]},${grade}`;
+  });
+  const counts = Object.fromEntries(bands.map(([g]) => [g, 0]));
+  expectedLines.forEach(l => counts[l.split(",")[2]]++);
+  await expect(page.locator("#gradeSummary")).toHaveText(bands.map(([g]) => `${g}: ${counts[g]}`).join(""));
+
+  const { filename, text } = await download(page);
+  expect(filename).toMatch(/^grades_CS_F211_\d{4}-\d{2}-\d{2}\.csv$/);
+  const lines = text.split("\n");
+  expect(lines.slice(0, 4)).toEqual(["Instructor,Dr Rao", "Course,CS F211", "", "BITS ID,Total Marks,Grade"]);
+  expect(lines.slice(4, -1)).toEqual(expectedLines); // every student exactly once, in file order
+  expect(lines.at(-1)).toBe("");
+  await expect(page.locator("#thankyou")).toContainText("in your first attempt");
 });
