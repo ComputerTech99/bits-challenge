@@ -814,8 +814,10 @@ dropzone.addEventListener("drop",e=>{
 });
 
 // Once a course is open the setup collapses to one line; Edit expands it again.
+// It describes the file; the instructor and course are in the app bar (#33).
 function collapseSetup(){
-  setupSummaryText.textContent=`${instructor.value.trim()} · ${loadedFileName} · ${data.length} students`;
+  const n=new Set(data.map(d=>d.Course)).size;
+  setupSummaryText.textContent=`${loadedFileName} · ${data.length} students · ${n} ${n===1?"course":"courses"}`;
   setup.classList.add("collapsed");
 }
 editSetup.onclick=()=>{

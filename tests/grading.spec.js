@@ -653,7 +653,8 @@ test("setup: the sample file link points at the demo file", async ({ page, reque
 
 test("setup: collapses to a summary once a course is open, and Edit expands it", async ({ page }) => {
   await startGrading(page, "demo_marks.xlsx", "Introduction to Programming");
-  await expect(page.locator("#setupSummaryText")).toHaveText("Dr Rao · demo_marks.xlsx · 148 students");
+  // #33: the instructor and course live in the app bar only.
+  await expect(page.locator("#setupSummaryText")).toHaveText("demo_marks.xlsx · 148 students · 3 courses");
   await expect(page.locator("#instructor")).toBeHidden();
   await expect(page.locator("#course")).toBeVisible(); // switching course stays one click away
   await page.click("#editSetup");
@@ -1168,6 +1169,14 @@ async function touchSwipe(page, from, to, steps = 12) {
   await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   await page.waitForTimeout(300); // let any scroll settle
 }
+
+test("#33 the instructor and course are shown once, in the app bar", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  for (const text of ["Dr Rao", INTRO]) {
+    await expect(page.locator("#appContext")).toContainText(text);
+    await expect(page.locator("#setupSummary")).not.toContainText(text);
+  }
+});
 
 test.describe("#32 touch at 390px", () => {
   test.use({ viewport: { width: 390, height: 700 }, hasTouch: true, isMobile: true });

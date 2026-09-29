@@ -324,3 +324,4 @@ rewritten to check the same guarantee through the new UI. None was deleted.
 | #15 (export blocked without a name) | E4 | The block happens when opening the review: inline message, no dialog, no download. |
 | #18 (ordinals) | E4 | 23 finalizes through the dialog. |
 | #27b (blocked export clears on re-upload) | E4 | The blocked attempt clicks "Review grades". |
+| setup: collapses to a summary (summary text) | Stage 2B, #33: the summary no longer repeats the instructor, who is shown in the app bar. | The summary reads `demo_marks.xlsx · 148 students · 3 courses`. Collapse, Edit and focus are checked as before. |
