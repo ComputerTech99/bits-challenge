@@ -3,4 +3,4 @@
 const { defineConfig } = require("@playwright/test");
 const base = require("./playwright.config.js");
 
-module.exports = defineConfig({ ...base, testDir: "scripts", testMatch: "screenshots.spec.js" });
+module.exports = defineConfig({ ...base, testDir: "scripts", testMatch: ["screenshots.spec.js", "capture-goldens.spec.js"] });

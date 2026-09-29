@@ -597,3 +597,18 @@ test("ground truth: demo file, Introduction to Programming, default cutoffs", as
   await expect(stat(page, "Median")).toHaveText("64");
   expect(await gradeCounts(page)).toEqual({ A: 8, "A-": 17, B: 10, "B-": 13, C: 9, "C-": 4, D: 1, E: 2 });
 });
+
+// Stage 2 must not change the export: compare with the bytes Stage 1 produced
+// (tests/golden, captured by scripts/capture-goldens.spec.js).
+const GOLDEN = require("path").join(__dirname, "golden");
+for (const [file, course] of [
+  ["intro_default.csv", "Introduction to Programming"],
+  ["prob_default.csv", "Probability & Statistics"],
+  ["linalg_default.csv", "Linear Algebra"],
+]) {
+  test(`golden: ${course} CSV is byte-identical to Stage 1 (default cutoffs)`, async ({ page }) => {
+    await startGrading(page, "demo_marks.xlsx", course);
+    const { bytes } = await download(page);
+    expect(bytes.equals(require("fs").readFileSync(require("path").join(GOLDEN, file)))).toBe(true);
+  });
+}
