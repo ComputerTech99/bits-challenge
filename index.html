@@ -244,6 +244,8 @@ button.enabled{
   </details>
 </div>
 
+<div id="uploadError" class="error"></div>
+
 <div id="welcome" class="notice"></div>
 
 <div class="workspace">
@@ -344,6 +346,45 @@ function resetGradingView(){
   download.classList.remove("enabled");
 }
 
+// Accepted spellings for each required column (compared trimmed, lower-case).
+const COLUMNS={
+  "BITS ID":["bits id","student's bits id"],
+  "Course":["course"],
+  "Total Marks":["total marks","total marks (out of 100)"]
+};
+
+function normaliseHeader(h){
+  return String(h).trim().toLowerCase()
+    .replace(/\s+/g," ")
+    .replace(/’/g,"'"); // Excel often autocorrects ' to a curly quote
+}
+
+// Reads the first sheet into rows keyed by the canonical column names.
+// Returns { errors, rows }; errors is a list of messages to show the user.
+function parseMarksSheet(sheet){
+  const table=XLSX.utils.sheet_to_json(sheet,{header:1,defval:""});
+  const headers=(table[0]||[]).map(normaliseHeader);
+
+  const col={}, missing=[];
+  for(const [name,spellings] of Object.entries(COLUMNS)){
+    const i=headers.findIndex(h=>spellings.includes(h));
+    if(i<0) missing.push(name); else col[name]=i;
+  }
+  if(missing.length){
+    return {errors:[`Missing required column: ${missing.join(", ")}. `+
+      `Expected headers: BITS ID, Course, Total Marks.`], rows:[]};
+  }
+
+  const rows=table.slice(1)
+    .filter(r=>r.some(v=>String(v).trim()!=="")) // skip fully blank lines
+    .map(r=>({
+      "BITS ID":r[col["BITS ID"]],
+      "Course":r[col["Course"]],
+      "Total Marks":r[col["Total Marks"]]
+    }));
+  return {errors:[], rows};
+}
+
 file.onchange=e=>{
   const f=e.target.files[0];
   if(!f) return; // dialog cancelled: keep whatever is already loaded
@@ -352,10 +393,16 @@ file.onchange=e=>{
   data=[];
   course.options.length=1; // keep only the placeholder option
   resetGradingView();
+  uploadError.innerText="";
   const r=new FileReader();
   r.onload=ev=>{
     const wb=XLSX.read(ev.target.result,{type:"binary"});
-    data=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+    const parsed=parseMarksSheet(wb.Sheets[wb.SheetNames[0]]);
+    if(parsed.errors.length){
+      uploadError.innerText=parsed.errors.join("\n");
+      return;
+    }
+    data=parsed.rows;
     // One option per distinct course, not one per student row.
     [...new Set(data.map(d=>d.Course))].forEach(c=>{
       course.add(new Option(c,c));

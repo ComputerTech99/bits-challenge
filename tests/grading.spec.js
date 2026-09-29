@@ -52,3 +52,22 @@ test("#4 cancelling the file dialog does not throw or discard loaded data", asyn
   expect(await courseOptions(page)).toEqual(["", "CS F211", "MATH F112"]);
   await expect(page.locator("#course")).toHaveValue("CS F211");
 });
+
+test("#5 headers from the brief are recognised", async ({ page }) => {
+  await startGrading(page, "brief_headers.xlsx", "CS F211");
+  await expect(stat(page, "Min")).toHaveText("45");
+  await expect(stat(page, "Max")).toHaveText("85");
+  const { text } = await download(page);
+  expect(text).toContain("2023A7PS0001P,85,A");
+});
+
+test("#5 headers are matched case-insensitively and trimmed", async ({ page }) => {
+  await startGrading(page, "messy_headers.xlsx", "CS F211");
+  await expect(stat(page, "Max")).toHaveText("85");
+});
+
+test("#5 a missing required column is reported inline", async ({ page }) => {
+  await upload(page, "missing_column.xlsx");
+  await expect(page.locator("#uploadError")).toContainText("Total Marks");
+  expect(await courseOptions(page)).toEqual([""]);
+});
