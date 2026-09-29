@@ -513,7 +513,7 @@ function validateRanges(){
     const g=GRADES[i];
     const minV=+document.getElementById(g+"min").value;
     const maxV=+document.getElementById(g+"max").value;
-    if(minV>=maxV) return "Each grade must have Min < Max.";
+    if(minV>maxV) return "Each grade must have Min ≤ Max.";
     if(i>0){
       const prevMin=+document.getElementById(GRADES[i-1]+"min").value;
       if(maxV!==prevMin-1) return "Grade ranges must be continuous with no gaps or overlaps.";

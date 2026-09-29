@@ -125,3 +125,13 @@ test("#8 bands must cover 0–100: E min above 0 is rejected", async ({ page }) 
   await expect(page.locator("#rangeError")).toContainText("E must start at 0");
   await expect(page.locator("#download")).toBeDisabled();
 });
+
+test("#9 a single-mark band (A = 100–100) is valid", async ({ page }) => {
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
+  await page.selectOption("#Amin", "100"); // cascades A- max to 99
+  await expect(page.locator("#rangeError")).toBeEmpty();
+  await expect(page.locator("#download")).toBeEnabled();
+  const { text } = await download(page);
+  expect(text).toContain("2023A7PS0006P,100,A\n");
+  expect(text).toContain("2023A7PS0005P,80,A-\n");
+});
