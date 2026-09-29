@@ -373,3 +373,16 @@ test("#21 SheetJS is loaded from the pinned 0.18.5 URL", async ({ page }) => {
   const srcs = await page.locator("script[src]").evaluateAll(s => s.map(x => x.getAttribute("src")));
   expect(srcs).toEqual(["https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"]);
 });
+
+test("#22 Reset Range before a course is open does nothing and does not throw", async ({ page }) => {
+  const errors = [], dialogs = [];
+  page.on("pageerror", e => errors.push(e.message));
+  page.on("dialog", d => { dialogs.push(d.message()); d.accept(); });
+  await page.click("#resetRanges");            // fresh page
+  await upload(page, "valid_basic.xlsx");      // courses loaded, none selected
+  await expect(page.locator("#course option")).toHaveCount(3);
+  await page.click("#resetRanges");
+  await page.waitForTimeout(200);
+  expect(errors).toEqual([]);
+  expect(dialogs).toEqual([]);
+});

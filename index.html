@@ -511,6 +511,7 @@ function buildGradeUI(){
 }
 
 resetRanges.onclick=()=>{
+  if(!grades.children.length) return; // no course open yet, so no ranges to reset
   if(!confirm("This will reset all grade ranges to the default values.\nDo you want to continue?")) return;
   GRADES.forEach(g=>{
     document.getElementById(g+"min").value=DEFAULTS[g][0];
