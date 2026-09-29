@@ -33,11 +33,14 @@ function stat(page, label) {
   return page.locator(".stat", { hasText: label }).locator("b");
 }
 
-// Click "Finalize & Download" and return { filename, text }.
+// Click "Finalize & Download" and return { filename, text, bytes }.
+// `text` has the UTF-8 BOM (added in #30) removed so tests can compare CSV
+// content directly; `bytes` is the raw file for checking the BOM itself.
 async function download(page) {
   const [dl] = await Promise.all([page.waitForEvent("download"), page.click("#download")]);
-  const text = fs.readFileSync(await dl.path(), "utf8");
-  return { filename: dl.suggestedFilename(), text };
+  const bytes = fs.readFileSync(await dl.path());
+  const text = bytes.toString("utf8").replace(/^\uFEFF/, "");
+  return { filename: dl.suggestedFilename(), text, bytes };
 }
 
 async function courseOptions(page) {

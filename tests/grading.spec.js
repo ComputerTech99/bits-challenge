@@ -565,3 +565,26 @@ test("#29 csvField prefixes every formula trigger and still quotes per RFC 4180"
     ["=1+1", "+1", "-1", "@SUM(A1)", "\tx", "\rx", "=1,2", "a=b", "Dr Rao"].map(csvField));
   expect(out).toEqual(["'=1+1", "'+1", "'-1", "'@SUM(A1)", "'\tx", "\"'\rx\"", "\"'=1,2\"", "a=b", "Dr Rao"]);
 });
+
+test("#30 CSV starts with a UTF-8 BOM so Excel reads non-ASCII names", async ({ page }) => {
+  await startGrading(page, "valid_basic.xlsx", "CS F211", "Dr Śrīnivāsan");
+  const { bytes, text } = await download(page);
+  expect([...bytes.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+  expect(text.split("\n")[0]).toBe("Instructor,Dr Śrīnivāsan");
+});
+
+test("#30 the Blob URL is revoked after the download starts", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__created = []; window.__revoked = [];
+    const create = URL.createObjectURL, revoke = URL.revokeObjectURL;
+    URL.createObjectURL = b => { const u = create(b); window.__created.push(u); return u; };
+    URL.revokeObjectURL = u => { window.__revoked.push(u); return revoke(u); };
+  });
+  await pausedClock(page);
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
+  await download(page);
+  await page.clock.fastForward(60_000);
+  const { created, revoked } = await page.evaluate(() => ({ created: window.__created, revoked: window.__revoked }));
+  expect(created).toHaveLength(1);
+  expect(revoked).toEqual(created);
+});

@@ -751,9 +751,15 @@ download.onclick=()=>{
   });
 
   const a=document.createElement("a");
-  a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+  // The BOM tells Excel (notably on Windows) the file is UTF-8, so names with
+  // non-ASCII characters aren't garbled.
+  a.href=URL.createObjectURL(new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"}));
   a.download=csvFileName(course.value);
   a.click();
+  // Free the Blob once the download has started. Revoking immediately after
+  // click() can cancel it in some browsers, so wait (as FileSaver.js does).
+  const url=a.href;
+  setTimeout(()=>URL.revokeObjectURL(url),40000);
 
   if(finalizeCount === 1){
     thankyou.innerText =
