@@ -1,7 +1,7 @@
 // Regression tests for the Stage 1 bug fixes. Test names reference the
 // row number in BUG_FIX_LOG.md.
 const { test, expect } = require("@playwright/test");
-const { openApp, upload, startGrading, stat, download, courseOptions } = require("./helpers");
+const { openApp, upload, startGrading, stat, download, courseOptions, gradeCounts } = require("./helpers");
 
 const XLSX = require("xlsx");
 const { fixture } = require("./helpers");
@@ -587,4 +587,13 @@ test("#30 the Blob URL is revoked after the download starts", async ({ page }) =
   const { created, revoked } = await page.evaluate(() => ({ created: window.__created, revoked: window.__revoked }));
   expect(created).toHaveLength(1);
   expect(revoked).toEqual(created);
+});
+
+test("ground truth: demo file, Introduction to Programming, default cutoffs", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", "Introduction to Programming");
+  await expect(stat(page, "Min")).toHaveText("0");
+  await expect(stat(page, "Max")).toHaveText("100");
+  await expect(stat(page, "Avg")).toHaveText("60.78");
+  await expect(stat(page, "Median")).toHaveText("64");
+  expect(await gradeCounts(page)).toEqual({ A: 8, "A-": 17, B: 10, "B-": 13, C: 9, "C-": 4, D: 1, E: 2 });
 });

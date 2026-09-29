@@ -47,4 +47,10 @@ async function courseOptions(page) {
   return page.locator("#course option").evaluateAll(opts => opts.map(o => o.value));
 }
 
-module.exports = { openApp, fixture, upload, startGrading, stat, download, courseOptions };
+// Per-grade student counts as shown in the grade distribution, e.g. { A: 8, "A-": 17, ... }.
+async function gradeCounts(page) {
+  const texts = await page.locator("#gradeSummary span").allTextContents();
+  return Object.fromEntries(texts.map(t => { const [g, n] = t.split(":"); return [g.trim(), Number(n)]; }));
+}
+
+module.exports = { openApp, fixture, upload, startGrading, stat, download, courseOptions, gradeCounts };
