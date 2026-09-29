@@ -6,10 +6,16 @@ const SHEETJS = path.join(__dirname, "..", "node_modules", "xlsx", "dist", "xlsx
 
 // Serve SheetJS from node_modules (same 0.18.5 build as the CDN) so the
 // tests are deterministic and work offline.
-async function openApp(page) {
+async function openApp(page, { realFonts = false } = {}) {
   await page.route("**/npm/xlsx*/dist/xlsx.full.min.js", route =>
     route.fulfill({ contentType: "application/javascript", body: fs.readFileSync(SHEETJS) })
   );
+  // No network for fonts: the app must look right with its system-font fallback.
+  if (!realFonts) {
+    await page.route(/fonts\.(googleapis|gstatic)\.com/, route =>
+      route.fulfill({ contentType: "text/css", body: "" })
+    );
+  }
   await page.goto("/");
 }
 

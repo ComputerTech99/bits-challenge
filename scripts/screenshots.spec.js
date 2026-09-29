@@ -18,9 +18,14 @@ for (const width of WIDTHS) {
   for (const name of ONLY) {
     test(`${name} @ ${width}`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
-      await openApp(page);
+      await openApp(page, { realFonts: true });
+      await page.evaluate(() => document.fonts.ready);
       await STATES[name](page);
-      await page.screenshot({ path: path.join(OUT, `${name}-${width}.png`), fullPage: true });
+      // Grow the viewport to the whole page so sticky elements sit where they
+      // really end up, instead of being stitched mid-page by fullPage capture.
+      const height = await page.evaluate(() => document.documentElement.scrollHeight);
+      await page.setViewportSize({ width, height: Math.max(900, height) });
+      await page.screenshot({ path: path.join(OUT, `${name}-${width}.png`) });
     });
   }
 }
