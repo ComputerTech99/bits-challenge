@@ -345,6 +345,9 @@ function resetGradingView(){
 }
 
 file.onchange=e=>{
+  const f=e.target.files[0];
+  if(!f) return; // dialog cancelled: keep whatever is already loaded
+
   // A new upload replaces the old one completely.
   data=[];
   course.options.length=1; // keep only the placeholder option
@@ -358,7 +361,7 @@ file.onchange=e=>{
       course.add(new Option(c,c));
     });
   };
-  r.readAsBinaryString(e.target.files[0]);
+  r.readAsBinaryString(f);
 };
 
 course.onchange=()=>{

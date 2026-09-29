@@ -40,3 +40,15 @@ test("#3 file input accepts both .xlsx and .xls", async ({ page }) => {
   const accept = (await page.locator("#file").getAttribute("accept")).split(",").map(s => s.trim());
   expect(accept).toEqual(expect.arrayContaining([".xlsx", ".xls"]));
 });
+
+test("#4 cancelling the file dialog does not throw or discard loaded data", async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", e => errors.push(e.message));
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
+  // Chrome fires "change" with an empty FileList when a re-opened dialog is cancelled.
+  await page.locator("#file").setInputFiles([]);
+  await page.waitForTimeout(200);
+  expect(errors).toEqual([]);
+  expect(await courseOptions(page)).toEqual(["", "CS F211", "MATH F112"]);
+  await expect(page.locator("#course")).toHaveValue("CS F211");
+});
