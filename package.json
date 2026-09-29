@@ -1,0 +1,17 @@
+{
+  "name": "bits-grading-console",
+  "version": "1.0.0",
+  "description": "BITS Digital CodeForge grading console (dev tooling only; the app is index.html)",
+  "scripts": {
+    "serve": "serve .",
+    "fixtures": "node fixtures/generate.js",
+    "test": "playwright test"
+  },
+  "type": "commonjs",
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "serve": "^14.2.6",
+    "xlsx": "0.18.5"
+  },
+  "private": true
+}
