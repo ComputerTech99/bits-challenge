@@ -400,7 +400,8 @@ function parseMarksSheet(sheet){
     else if(marks<0 || marks>100) errors.push(`Row ${rowNo}: marks ${raw} is outside 0–100`);
 
     // Grade bands are whole numbers, so round half-up (79.5 -> 80, 80.2 -> 80).
-    rows.push({"BITS ID":id, "Course":courseName, "Total Marks":Math.round(marks)});
+    // Course is compared with the <select> value, which is always a string.
+    rows.push({"BITS ID":id, "Course":String(courseName).trim(), "Total Marks":Math.round(marks)});
   });
 
   if(!errors.length && !rows.length) errors.push("The file has no student rows.");

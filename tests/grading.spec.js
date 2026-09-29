@@ -406,3 +406,16 @@ test("#23 the no-instructor alert does not leave the previous course on screen",
   await expect(page.locator("#grades")).toBeEmpty();
   await expect(stat(page, "Max")).toHaveText("—");
 });
+
+test("#24 numeric course codes work and stray spaces don't split a course", async ({ page }) => {
+  await startGrading(page, "numeric_course.xlsx", "101");
+  expect(await courseOptions(page)).toEqual(["", "101", "202"]);
+  await expect(stat(page, "Min")).toHaveText("55");
+  await expect(stat(page, "Max")).toHaveText("85");
+  const { text } = await download(page);
+  expect(text.trim().split("\n").slice(4)).toEqual([
+    "2023A7PS0001P,75,A-",
+    "2023A7PS0002P,55,B-",
+    "2023A7PS0003P,85,A",
+  ]);
+});
