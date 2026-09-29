@@ -273,6 +273,7 @@ button.enabled{
       <button class="secondary" id="resetRanges">Reset Range</button>
       <button id="download" disabled>Finalize & Download</button>
     </div>
+    <div class="error" id="exportError"></div>
 
     <div class="timer-wrapper">
       <div class="timer-clock">
@@ -659,7 +660,15 @@ function csvFileName(courseName){
   return `grades_${safe}_${date}.csv`;
 }
 
+instructor.oninput=()=>{ exportError.innerText=""; };
+
 download.onclick=()=>{
+  // The name may have been cleared after the course was selected.
+  if(!instructor.value.trim()){
+    exportError.innerText="Please enter the instructor name before downloading.";
+    return;
+  }
+  exportError.innerText="";
   finalizeCount++;
   clearInterval(timerInterval);
   renderTimer(); // freeze the clock on the same time the message reports

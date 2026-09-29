@@ -281,3 +281,20 @@ test("#14 quotes in a course name are doubled", async ({ page }) => {
   expect(text).toContain('Course,"Intro to ""C"""\n');
   expect(filename).toMatch(/^grades_Intro_to_C_\d{4}-\d{2}-\d{2}\.csv$/);
 });
+
+test("#15 export is blocked inline when the instructor name is empty", async ({ page }) => {
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
+  await page.fill("#instructor", "   ");
+  let downloaded = false;
+  page.on("download", () => { downloaded = true; });
+  await page.click("#download");
+  await expect(page.locator("#exportError")).toContainText("instructor name");
+  await page.waitForTimeout(300);
+  expect(downloaded).toBe(false);
+  await expect(page.locator("#thankyou")).toBeEmpty();
+
+  await page.fill("#instructor", "Dr Rao");
+  await expect(page.locator("#exportError")).toBeEmpty();
+  const { text } = await download(page);
+  expect(text).toMatch(/^Instructor,Dr Rao\n/);
+});
