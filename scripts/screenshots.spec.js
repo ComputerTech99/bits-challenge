@@ -2,7 +2,7 @@
 // app yet are skipped via the `ready` check.
 const path = require("path");
 const { test } = require("@playwright/test");
-const { openApp, startGrading } = require("../tests/helpers");
+const { openApp, startGrading, typeCutoff } = require("../tests/helpers");
 
 const OUT = process.env.SHOTS_OUT || "docs/screenshots/after";
 const WIDTHS = (process.env.SHOTS_WIDTHS || "1440,1024,390").split(",").map(Number);
@@ -16,6 +16,12 @@ const STATES = {
     await page.locator("#uploadError").waitFor();
   },
   loaded: async page => { await startGrading(page, DEMO, COURSE); await page.waitForTimeout(700); },
+  "cutoff-moved": async page => {
+    await startGrading(page, DEMO, COURSE);
+    await typeCutoff(page, "A", 78);
+    await typeCutoff(page, "B-", 52);
+    await page.waitForTimeout(700);
+  },
 };
 const ONLY = process.env.SHOTS_STATES ? process.env.SHOTS_STATES.split(",") : Object.keys(STATES);
 

@@ -6,6 +6,7 @@ the end of a trimester:
 | # | Instructor's question | Enhancement |
 |---|---|---|
 | E1 | "How do I set cutoffs without breaking the ranges?" | A cutoff editor that can't produce invalid ranges |
+| E2 | "Where do my cutoffs fall on this class's distribution?" | The histogram becomes the control surface |
 
 All grade calculations go through one function, `gradeFor(mark)`. The counts, the
 distribution table, the chart, the borderline list and the CSV export can't
@@ -67,6 +68,64 @@ follows from it.
 
 ---
 
+## E2: The histogram becomes the control surface
+
+**Problem.** The chart and the cutoffs lived in separate panels, and the chart
+grouped marks into 10-mark bins. The instructor couldn't see where a cutoff fell
+on the distribution, and the bins hid exactly the detail that matters: a 10-mark
+bin can't show whether the students near 80 are at 79 or at 71.
+
+**Solution.**
+- **One bar per mark:** an inline SVG histogram with one bar per mark (0–100), so
+  a 79/80 boundary is exact. Each bar is coloured by the grade that mark currently
+  receives (the grade ramp, via `gradeFor`).
+- **Axes:** integer y-ticks with faint gridlines, and x-ticks every 10 marks.
+- **Bands:** each grade band is shaded with a very light tint, with its letter
+  at the top.
+- **Draggable cutoffs:** every cutoff is a vertical line with a draggable handle
+  (pointer events, snapping to whole marks). A drag goes through the same
+  `setCutoff()` as the inputs, so it obeys the E1 limits and updates the counts,
+  colours and ranges live. The handles are `aria-hidden`; the E1 inputs are the
+  keyboard route to the same action.
+- **Tooltips:** hovering a mark shows e.g. "79 marks: 1 student (A-)". The chart
+  is one tab stop; ←/→ (and Home/End/PageUp/PageDown) move between marks and
+  show the same tooltip, announced through `role="status"`.
+- **Bell curve:** dashed `--ink-muted`, drawn as expected students per mark
+  (n × pdf) through the bar centres, on a y-scale shared with the bars. The
+  scale is max(tallest bar, curve peak), keeping the #26 fix. The curve is
+  skipped when std = 0.
+- **Stats and screen-reader text:** the stats row adds Std dev (population,
+  matching the curve), and a visually hidden text summary gives screen-reader
+  users the distribution and per-grade counts.
+- **Implementation:** the chart is built once per course (and on resize).
+  Cutoff changes only move and recolour existing elements, so a handle is never
+  destroyed mid-drag, and the bars grow once when a course opens (reduced motion
+  respected).
+
+**Why this beats the obvious alternative.** The obvious step is to keep a static
+chart and draw the cutoff lines on it. That answers "where do my cutoffs fall",
+but the instructor still has to look back and forth between the chart and a
+form. Making the lines draggable puts the decision where the evidence is. Per-mark
+bars mean a one-mark move visibly changes which bars take which colour.
+
+**How it was tested.**
+- `E2:` tests cover the following.
+  - Bar colours: they follow a cutoff move (mark 79 turns from A- to A).
+  - Dragging: dragging the A handle to 78 changes the cutoff and the A count
+    (checked against the fixture). Dragging A- past A stops at 79, and dragging D
+    to 0 stops at 1.
+  - Tooltips: the text is correct on hover and when read by keyboard.
+  - The handles are aria-hidden.
+  - Std dev and the hidden summary are correct.
+- The Stage 1 chart tests were rewritten for the SVG (see below). A mutation
+  check confirmed the clustered-marks test fails without the shared-scale fix.
+- **UX bug found by testing:** the first version gave each handle a 20px
+  invisible grab strip. That swallowed hover on the bars on either side of every
+  cutoff, which are the marks an instructor most wants to inspect. The strip is
+  now 6px and the knob is the main grab target.
+
+---
+
 ## Stage 1 tests rewritten in Stage 2
 
 When a Stage 2 change legitimately made a Stage 1 test obsolete, the test was
@@ -86,3 +145,6 @@ rewritten to check the same guarantee through the new UI. None was deleted.
 | #19 ×2 (reset confirms once) | E1 | The same guarantees through "Reset cutoffs" and the cutoff inputs. |
 | #22 (reset before a course) | E1: the button is now disabled until there is something to reset. | Disabled on a fresh page and after upload. A forced click causes no error and no dialog. |
 | Happy path (adjust a range) | E1 | The cutoff is adjusted with the new input. Counts are read from the distribution table. |
+| #2 (canvas blank after re-upload) | E2 replaced the canvas with SVG. | The SVG chart is empty after a re-upload. |
+| #12 ×6 (canvas histogram) | E2: SVG, one bar per mark. | Bars stay inside the plot and use the space. The x-axis is labelled every 10 (it was "0–9 … 90–100" bins). The curve passes through the bar centres and equals n × pdf for 1-mark bins (it was n × 10 × pdf for 10-mark bins). No curve and no NaN when std = 0. A re-upload during the opening animation leaves no stale chart. |
+| #26 ×2 (clustered curve) | E2 | The curve's highest point stays inside the plot area (read from the SVG path instead of recorded canvas calls). |

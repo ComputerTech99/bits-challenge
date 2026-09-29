@@ -39,11 +39,7 @@ test("#2 course list is deduplicated and fully reset on re-upload", async ({ pag
   for (const label of ["Min", "Max", "Avg", "Median"]) {
     await expect(stat(page, label)).toHaveText("—");
   }
-  const blank = await page.evaluate(() => {
-    const px = document.getElementById("hist").getContext("2d").getImageData(0, 0, 380, 240).data;
-    return px.every(v => v === 0);
-  });
-  expect(blank).toBe(true);
+  await expect(page.locator("#hist > *")).toHaveCount(0); // Stage 2: SVG chart, was a canvas pixel check
 });
 
 test("#3 file input accepts both .xlsx and .xls", async ({ page }) => {
@@ -202,86 +198,89 @@ test("#11 timer runs a single interval and stops on finalize", async ({ page }) 
   await expect(page.locator("#timerText")).toHaveText(frozen);
 });
 
-// Colour of any pixel on the histogram canvas matching the bar colour #5b3cc4.
-async function purpleRows(page) {
+// Reads the SVG histogram: bars, curve points and the plot area.
+async function chartGeometry(page) {
   return page.evaluate(() => {
-    const d = document.getElementById("hist").getContext("2d").getImageData(0, 0, 380, 240).data;
-    const rows = new Set();
-    for (let i = 0; i < d.length; i += 4) {
-      if (d[i] === 0x5b && d[i + 1] === 0x3c && d[i + 2] === 0xc4) rows.add(Math.floor(i / 4 / 380));
-    }
-    return [...rows].sort((a, b) => a - b);
-  });
-}
-
-// Calls drawBellCurve with a stub context and returns the [x, y] points drawn.
-async function curvePoints(page, marks, pxPerStudent = 1) {
-  return page.evaluate(([marks, pxPerStudent]) => {
-    const pts = [];
-    const ctx = { beginPath() {}, stroke() {}, setLineDash() {}, moveTo: (x, y) => pts.push([x, y]), lineTo: (x, y) => pts.push([x, y]) };
-    drawBellCurve(ctx, marks, 1, pxPerStudent);
-    return pts;
-  }, [marks, pxPerStudent]);
-}
-
-test("#12 bars are scaled to fit the chart and stay inside the canvas", async ({ page }) => {
-  await startGrading(page, "large_class.xlsx", "CS F211");
-  await page.waitForTimeout(600);
-  // Since #26 the shared scale is 180px per max(tallest bin, curve peak).
-  const marks = XLSX.utils.sheet_to_json(XLSX.readFile(fixture("large_class.xlsx")).Sheets.Marks).map(r => r["Total Marks"]);
-  const n = marks.length, mean = marks.reduce((a, b) => a + b) / n;
-  const std = Math.sqrt(marks.reduce((a, b) => a + (b - mean) ** 2, 0) / n);
-  const bins = Array(10).fill(0);
-  marks.forEach(m => bins[Math.min(9, Math.floor(m / 10))]++);
-  const tallest = Math.max(...bins);
-  const expectedTop = 210 - tallest * 180 / Math.max(tallest, n * 10 / (std * Math.sqrt(2 * Math.PI)));
-  const rows = await purpleRows(page);
-  expect(rows[0]).toBeGreaterThanOrEqual(25); // headroom above the tallest bar
-  expect(Math.abs(rows[0] - expectedTop)).toBeLessThanOrEqual(2);
-});
-
-test("#12 bin labels are 0–9 … 90–100", async ({ page }) => {
-  await page.addInitScript(() => {
-    window.__labels = [];
-    const orig = CanvasRenderingContext2D.prototype.fillText;
-    CanvasRenderingContext2D.prototype.fillText = function (t, ...rest) {
-      window.__labels.push(String(t));
-      return orig.call(this, t, ...rest);
+    const svg = document.getElementById("hist");
+    const num = (el, a) => Number(el.getAttribute(a));
+    const hits = [...svg.querySelectorAll("rect.hit")];
+    const path = svg.querySelector("path.curve");
+    return {
+      bars: [...svg.querySelectorAll("rect.bar")].map(b => ({
+        mark: Number(b.dataset.mark), x: num(b, "x"), w: num(b, "width"), y: num(b, "y"), h: num(b, "height"), fill: b.style.fill })),
+      curve: path ? path.getAttribute("d").match(/[ML][^ML]+/g).map(p => p.slice(1).trim().split(" ").map(Number)) : [],
+      hitX: hits.map(h => num(h, "x")),
+      step: hits.length ? num(hits[0], "width") : 0,
+      plotTop: hits.length ? num(hits[0], "y") : 0,
+      plotBottom: hits.length ? num(hits[0], "y") + num(hits[0], "height") : 0,
+      xTicks: [...svg.querySelectorAll(".axes text[text-anchor=middle]")].map(t => t.textContent),
+      attrs: [...svg.querySelectorAll("*")].flatMap(el => [...el.attributes].map(a => a.value)),
     };
   });
-  await page.goto("/");
+}
+
+// Marks of one course in a fixture, for computing expectations independently.
+function fixtureMarks(file, course) {
+  return XLSX.utils.sheet_to_json(XLSX.readFile(fixture(file)).Sheets.Marks)
+    .filter(r => String(r.Course).trim() === course).map(r => Math.round(r["Total Marks"]));
+}
+
+// Stage 2 (E2): the canvas became an SVG with one bar per mark. The #12 tests
+// keep their guarantees, restated for 1-mark bins.
+test("#12 bars are scaled to fit the chart and stay inside it", async ({ page }) => {
+  await startGrading(page, "large_class.xlsx", "CS F211");
+  const g = await chartGeometry(page);
+  expect(g.bars.length).toBeGreaterThan(0);
+  for (const b of g.bars) {
+    expect(b.y).toBeGreaterThanOrEqual(g.plotTop - 0.01);
+    expect(b.y + b.h).toBeLessThanOrEqual(g.plotBottom + 0.01);
+  }
+  const tallest = Math.max(...g.bars.map(b => b.h));
+  expect(tallest).toBeGreaterThan(0.5 * (g.plotBottom - g.plotTop)); // uses the space
+  expect(Math.min(...g.curve.map(([, y]) => y))).toBeGreaterThanOrEqual(g.plotTop - 0.01);
+});
+
+test("#12 x-axis is labelled every 10 marks, 0 to 100", async ({ page }) => {
   await startGrading(page, "valid_basic.xlsx", "CS F211");
-  await page.waitForTimeout(600);
-  const labels = await page.evaluate(() => window.__labels.slice(-10));
-  expect(labels).toEqual(["0–9", "10–19", "20–29", "30–39", "40–49", "50–59", "60–69", "70–79", "80–89", "90–100"]);
+  expect((await chartGeometry(page)).xTicks).toEqual(["0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100"]);
 });
 
-test("#12 bell curve is aligned to bar centres", async ({ page }) => {
-  const pts = await curvePoints(page, [...Array(50).fill(45), ...Array(50).fill(65)]);
-  // bar i spans x = 30+i*32 .. +24, so bin 0 (marks 0–9) is centred at 42 and bin 9 at 330
-  expect(pts[5][0]).toBeCloseTo(42, 0);
-  expect(pts[95][0]).toBeCloseTo(330, 0);
+test("#12 bell curve passes through the bar centres", async ({ page }) => {
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
+  const g = await chartGeometry(page);
+  expect(g.curve).toHaveLength(101);
+  for (const m of [0, 5, 50, 95, 100]) expect(g.curve[m][0]).toBeCloseTo(g.hitX[m] + g.step / 2, 1);
+  for (const b of g.bars) expect(b.x + b.w / 2).toBeCloseTo(g.hitX[b.mark] + g.step / 2, 1);
 });
 
-test("#12 bell curve is drawn as expected student counts (n × 10 × pdf)", async ({ page }) => {
-  // 100 students, mean 55, std 10: expected count per 10-mark bin at the mean = 100*10*pdf(55)
-  const pts = await curvePoints(page, [...Array(50).fill(45), ...Array(50).fill(65)], 1);
-  const expected = 100 * 10 * (1 / (10 * Math.sqrt(2 * Math.PI)));
-  expect(210 - pts[55][1]).toBeCloseTo(expected, 1);
+test("#12 bell curve is drawn as expected students per mark (n × pdf)", async ({ page }) => {
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
+  const marks = fixtureMarks("valid_basic.xlsx", "CS F211");
+  const n = marks.length, mean = marks.reduce((a, b) => a + b) / n;
+  const std = Math.sqrt(marks.reduce((a, b) => a + (b - mean) ** 2, 0) / n);
+  const g = await chartGeometry(page);
+  const bar = g.bars[0], count = marks.filter(m => m === bar.mark).length;
+  const pxPerStudent = bar.h / count;
+  for (const m of [20, Math.round(mean), 80]) {
+    const pdf = Math.exp(-0.5 * ((m - mean) / std) ** 2) / (std * Math.sqrt(2 * Math.PI));
+    expect(g.curve[m][1]).toBeCloseTo(g.plotBottom - n * pdf * pxPerStudent, 1);
+  }
 });
 
 test("#12 no curve (and no NaN) when every mark is identical", async ({ page }) => {
-  const pts = await curvePoints(page, Array(12).fill(65));
-  expect(pts.every(([x, y]) => Number.isFinite(x) && Number.isFinite(y))).toBe(true);
-  expect(pts).toEqual([]);
+  await startGrading(page, "identical_marks.xlsx", "CS F211");
+  const g = await chartGeometry(page);
+  expect(g.curve).toEqual([]);
+  expect(g.bars).toHaveLength(1);
+  expect(g.attrs.filter(v => v.includes("NaN"))).toEqual([]);
 });
 
-test("#12 an in-flight animation does not repaint after a re-upload", async ({ page }) => {
+test("#12 a re-upload during the opening animation leaves no stale chart", async ({ page }) => {
   await startGrading(page, "valid_basic.xlsx", "CS F211");
-  await upload(page, "valid_second.xlsx"); // well inside the 400ms animation
+  await upload(page, "valid_second.xlsx"); // inside the bars' grow animation
   await expect(page.locator("#course option")).toHaveCount(3);
   await page.waitForTimeout(600);
-  expect(await purpleRows(page)).toEqual([]);
+  await expect(page.locator("#hist > *")).toHaveCount(0);
 });
 
 test("#13 stats show — instead of undefined/NaN when there is no data", async ({ page }) => {
@@ -497,26 +496,12 @@ test("happy path: upload, select course, adjust a cutoff, export the right grade
   await expect(page.locator("#thankyou")).toContainText("in your first attempt");
 });
 
-// Records the y of every point drawn on a path (only the bell curve uses paths).
-async function recordCurveYs(page) {
-  await page.addInitScript(() => {
-    window.__curveYs = [];
-    for (const m of ["moveTo", "lineTo"]) {
-      const orig = CanvasRenderingContext2D.prototype[m];
-      CanvasRenderingContext2D.prototype[m] = function (x, y) { window.__curveYs.push(y); return orig.call(this, x, y); };
-    }
-  });
-  await page.goto("/");
-}
-
 for (const course of ["CS F211", "MATH F112"]) {
-  test(`#26 bell curve stays inside the canvas for clustered marks (${course})`, async ({ page }) => {
-    await recordCurveYs(page);
+  test(`#26 bell curve stays inside the chart for clustered marks (${course})`, async ({ page }) => {
     await startGrading(page, "clustered_marks.xlsx", course);
-    await page.waitForTimeout(600);
-    const ys = await page.evaluate(() => window.__curveYs);
-    expect(ys.length).toBeGreaterThan(0);
-    expect(Math.min(...ys)).toBeGreaterThanOrEqual(0);
+    const g = await chartGeometry(page);
+    expect(g.curve.length).toBeGreaterThan(0);
+    expect(Math.min(...g.curve.map(([, y]) => y))).toBeGreaterThanOrEqual(g.plotTop - 0.01);
   });
 }
 
@@ -766,4 +751,93 @@ test("golden: modified cutoffs (A 78, B- 52) export byte-identical to Stage 1", 
   await typeCutoff(page, "B-", 52);
   const { bytes } = await download(page);
   expect(bytes.equals(require("fs").readFileSync(require("path").join(GOLDEN, "intro_A78_Bminus52.csv")))).toBe(true);
+});
+
+// ===== E2: interactive histogram =====
+
+const INTRO = "Introduction to Programming";
+const introMarks = () => fixtureMarks("demo_marks.xlsx", INTRO);
+
+// Page x of a cutoff boundary / a mark's centre, from the chart's own geometry.
+async function markToPageX(page, mark, { centre = false } = {}) {
+  const g = await chartGeometry(page);
+  const box = await page.locator("#hist").boundingBox();
+  const vbWidth = await page.locator("#hist").evaluate(s => s.viewBox.baseVal.width);
+  return box.x + (g.hitX[mark] + (centre ? g.step / 2 : 0)) * (box.width / vbWidth);
+}
+
+async function dragHandle(page, grade, toMark) {
+  const knob = await page.locator(`.cutoff-handle[data-grade="${grade}"] .cutoff-knob`).boundingBox();
+  await page.mouse.move(knob.x + knob.width / 2, knob.y + knob.height / 2);
+  await page.mouse.down();
+  const target = await markToPageX(page, toMark);
+  await page.mouse.move(target, knob.y + 40, { steps: 8 });
+  await page.mouse.up();
+}
+
+test("E2: one bar per scored mark, coloured by the grade it currently receives", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  const bar = page.locator('#hist rect.bar[data-mark="79"]');
+  await expect(bar).toHaveCSS("fill", "rgb(63, 44, 156)");   // A- (#3f2c9c)
+  await typeCutoff(page, "A", 79);
+  await expect(bar).toHaveCSS("fill", "rgb(46, 31, 122)");   // A  (#2e1f7a)
+  expect((await chartGeometry(page)).bars).toHaveLength(new Set(introMarks()).size);
+});
+
+test("E2: dragging a cutoff handle moves the cutoff and updates the counts", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await dragHandle(page, "A", 78);
+  await expect(cutoffInput(page, "A")).toHaveValue("78");
+  const marks = introMarks();
+  expect((await gradeCounts(page)).A).toBe(marks.filter(m => m >= 78).length);   // 8 + the 78s and 79
+  await expect(page.locator("#changeCount")).toHaveText("1 cutoff changed from default");
+});
+
+test("E2: dragging obeys the same limits as the inputs", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await dragHandle(page, "A-", 95); // cannot pass A (80)
+  await expect(cutoffInput(page, "A-")).toHaveValue("79");
+  await dragHandle(page, "D", 0);   // cannot reach 0 (E keeps at least mark 0)
+  await expect(cutoffInput(page, "D")).toHaveValue("1");
+});
+
+test("E2: hovering a bar shows its mark, student count and grade", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  const count = introMarks().filter(m => m === 78).length;
+  const box = await page.locator("#hist").boundingBox();
+  await page.mouse.move(await markToPageX(page, 78, { centre: true }), box.y + box.height / 2);
+  await expect(page.locator("#tooltip")).toBeVisible();
+  await expect(page.locator("#tooltip")).toHaveText(`78 marks: ${count} students (A-)`);
+  await page.mouse.move(await markToPageX(page, 79, { centre: true }), box.y + box.height / 2);
+  await expect(page.locator("#tooltip")).toHaveText("79 marks: 1 student (A-)");
+});
+
+test("E2: the chart can be read by keyboard, one mark at a time", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await page.locator("#hist").focus();
+  const marks = introMarks();
+  await expect(page.locator("#tooltip")).toHaveText(`0 marks: ${marks.filter(m => m === 0).length} student${marks.filter(m => m === 0).length === 1 ? "" : "s"} (E)`);
+  await page.keyboard.press("End");
+  await expect(page.locator("#tooltip")).toContainText("100 marks:");
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.locator("#tooltip")).toContainText("99 marks:");
+  await page.keyboard.press("Tab");
+  await expect(page.locator("#tooltip")).toBeHidden();
+});
+
+test("E2: handles are pointer-only; the cutoff inputs are the keyboard route", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await expect(page.locator("#hist .handles")).toHaveAttribute("aria-hidden", "true");
+  await expect(page.locator("#hist .cutoff-handle")).toHaveCount(7);
+});
+
+test("E2: Std dev stat and a text summary for screen readers", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  const m = introMarks(), mean = m.reduce((a, b) => a + b) / m.length;
+  const std = Math.sqrt(m.reduce((a, b) => a + (b - mean) ** 2, 0) / m.length);
+  await expect(stat(page, "Std dev")).toHaveText(std.toFixed(2));
+  const summary = page.locator("#chartSummary");
+  await expect(summary).toContainText(`64 marks in ${INTRO}, from 0 to 100, mean 60.78`);
+  await expect(summary).toContainText("A 8 (80 to 100), A- 17 (70 to 79)");
+  await expect(page.locator("#hist")).toHaveAttribute("aria-describedby", "chartSummary");
 });

@@ -182,10 +182,41 @@ button.secondary{
 button:disabled{opacity:.45;cursor:not-allowed}
 
 /* ===== ANALYSIS ===== */
-#hist{display:block;max-width:100%;height:auto}
+/* ===== HISTOGRAM (SVG) ===== */
+.chart{position:relative}
+#hist{display:block;width:100%;overflow:visible}
+#hist:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:4px}
+#hist text{font-family:var(--font);font-size:12px;fill:var(--ink-muted);font-variant-numeric:tabular-nums}
+#hist .band-letter{font-weight:600;fill:var(--ink)}
+#hist .gridline{stroke:var(--rule);stroke-width:1}
+#hist .axis{stroke:#c9c3de;stroke-width:1}
+#hist .curve{fill:none;stroke:var(--ink-muted);stroke-width:1.5;stroke-dasharray:6 4}
+#hist .hit{fill:transparent}
+#hist .hit.active{fill:var(--accent);fill-opacity:.12}
+#hist .bar.highlight{stroke:var(--accent-strong);stroke-width:2}
+#hist .cutoff-line{stroke:var(--accent-strong);stroke-width:1.5}
+#hist .cutoff-knob{fill:var(--surface);stroke:var(--accent-strong);stroke-width:1.5}
+#hist .cutoff-handle{cursor:ew-resize;touch-action:none}
+#hist .cutoff-handle:hover .cutoff-line,#hist .cutoff-handle.dragging .cutoff-line{stroke:var(--accent);stroke-width:2.5}
+#hist .cutoff-handle:hover .cutoff-knob,#hist .cutoff-handle.dragging .cutoff-knob{stroke:var(--accent);fill:var(--g-E)}
+#hist .handle-hit{fill:transparent}
+#hist .bars.grow{animation:grow .45s ease-out}
+@keyframes grow{from{transform:scaleY(0)}}
+.tooltip{
+  position:absolute;
+  transform:translate(-50%,calc(-100% - 8px));
+  padding:4px 8px;
+  border-radius:6px;
+  background:var(--ink);
+  color:#fff;
+  font-size:12px;
+  white-space:nowrap;
+  pointer-events:none;
+  font-variant-numeric:tabular-nums;
+}
 .stats{
   display:grid;
-  grid-template-columns:repeat(4,1fr);
+  grid-template-columns:repeat(5,1fr);
   gap:8px;
   margin-top:16px;
 }
@@ -323,7 +354,7 @@ body.grading .empty-state{display:none}
 }
 @media (max-width:600px){
   .appbar,.container,.actionbar-inner{padding-left:16px;padding-right:16px}
-  .stats{grid-template-columns:repeat(2,1fr)}
+  .stats{grid-template-columns:repeat(3,1fr)}
   .actions{width:100%}
   .actions button{flex:1}
 }
@@ -393,7 +424,13 @@ body.grading .empty-state{display:none}
 <div class="workspace">
   <section class="panel" aria-labelledby="analysisHeading">
     <h2 id="analysisHeading">Distribution and cutoffs</h2>
-    <canvas id="hist" width="380" height="240"></canvas>
+    <div class="chart" id="chartBox">
+      <svg id="hist" tabindex="0" role="img"
+        aria-label="Histogram of marks with grade bands. Use the left and right arrow keys to read the number of students at each mark."
+        aria-describedby="chartSummary"></svg>
+      <div class="tooltip" id="tooltip" role="status" hidden></div>
+    </div>
+    <p class="visually-hidden" id="chartSummary"></p>
 
     <div class="cutoffs" role="group" aria-labelledby="cutoffsHeading">
       <h3 id="cutoffsHeading">Grade cutoffs</h3>
@@ -407,6 +444,7 @@ body.grading .empty-state{display:none}
       <div class="stat">Max<b id="max"></b></div>
       <div class="stat">Avg<b id="avg"></b></div>
       <div class="stat">Median<b id="med"></b></div>
+      <div class="stat">Std dev<b id="std"></b></div>
     </div>
   </section>
 
@@ -537,9 +575,8 @@ function resetGradingView(){
   resetRanges.disabled=true;
   welcome.innerText="";
   setup.classList.remove("collapsed"); // no course open: show the full setup
-  ["min","max","avg","med"].forEach(id=>document.getElementById(id).textContent="—");
-  cancelAnimationFrame(histFrame);
-  hist.getContext("2d").clearRect(0,0,380,240);
+  ["min","max","avg","med","std"].forEach(id=>document.getElementById(id).textContent="—");
+  clearChart();
   download.disabled=true;
   // Timer, attempt count and messages belong to one course.
   resetTimer();
@@ -718,8 +755,9 @@ course.onchange=()=>{
   previousCounts=null;           // opening a course is not a change to announce
   buildCutoffEditor();
   download.disabled=false;       // the editor cannot produce invalid ranges
-  drawHistogram();
+  focusMark=null;
   render();
+  buildChart(true);
 };
 
 // One row per cutoff: label, − / number / + and the derived range. E is fixed.
@@ -828,6 +866,8 @@ function render(){
   updateCutoffEditor();
   renderDistribution(counts,rows.length);
   announceCounts(counts);
+  updateChart();
+  updateChartSummary(rows,counts);
   computeStats();
   updateChangeCount();
 }
@@ -839,86 +879,259 @@ resetRanges.onclick=()=>{
   render();
 };
 
-// Histogram geometry: bar i is drawn at x = 30+i*32, 24px wide, on a baseline
-// at y = 210. The tallest bar is BAR_AREA px high.
-const BAR_AREA=180;
-let histFrame=null; // id of the running histogram animation frame, if any
+// ===== HISTOGRAM (inline SVG) =====
+// One bar per mark 0–100, coloured by gradeFor(mark), with grade bands behind
+// and a draggable line at each cutoff. buildChart() creates the elements once
+// per course (and on resize); updateChart() only moves/recolours them, so a
+// handle being dragged is never destroyed mid-drag.
+const SVG_NS="http://www.w3.org/2000/svg";
+const GRADE_COLOUR={"A":"--g-A","A-":"--g-Am","B":"--g-B","B-":"--g-Bm","C":"--g-C","C-":"--g-Cm","D":"--g-D","E":"--g-E"};
+let chart=null; // geometry and element references for the open course
 
-function drawHistogram(){
-  cancelAnimationFrame(histFrame); // stop an animation started by an earlier call
-  const ctx=hist.getContext("2d");
-  ctx.clearRect(0,0,380,240);
-
-  const marks=data.filter(d=>d.Course===course.value).map(d=>d["Total Marks"]);
-  if(!marks.length) return;
-
-  let bins=Array(10).fill(0);
-  marks.forEach(m=>bins[Math.min(9,Math.floor(m/10))]++);
-  // Shared y-scale: fit whichever is taller, the tallest bar or the curve's peak.
-  // The curve peaks at n×10×pdf(mean) = n×10/(std×√2π), which exceeds the
-  // tallest bin when marks are clustered more tightly than the 10-mark bin width.
-  const n=marks.length;
-  const mean=marks.reduce((a,b)=>a+b,0)/n;
-  const std=Math.sqrt(marks.reduce((a,b)=>a+(b-mean)**2,0)/n);
-  const curvePeak=std>0 ? n*10/(std*Math.sqrt(2*Math.PI)) : 0;
-  const pxPerStudent=BAR_AREA/Math.max(...bins,curvePeak);
-
-  let start=null;
-  function animate(ts){
-    if(!start) start=ts;
-    const p=Math.min((ts-start)/400,1);
-    ctx.clearRect(0,0,380,240);
-
-    bins.forEach((v,i)=>{
-      const h=v*pxPerStudent*p;
-      ctx.fillStyle="#5b3cc4";
-      ctx.fillRect(30+i*32,210-h,24,h);
-      ctx.fillStyle="#111827";
-      ctx.font="9px Arial"; // 10px labels run together at 32px spacing
-      ctx.textAlign="center";
-      const label=i===9 ? "90–100" : `${i*10}–${i*10+9}`; // last bin includes 100
-      ctx.fillText(label,30+i*32+12,228);
-    });
-
-    drawBellCurve(ctx, marks, p, pxPerStudent);
-
-    if(p<1) histFrame=requestAnimationFrame(animate);
-  }
-  histFrame=requestAnimationFrame(animate);
+function svgEl(tag,attrs={},parent){
+  const el=document.createElementNS(SVG_NS,tag);
+  for(const [k,v] of Object.entries(attrs)) el.setAttribute(k,v);
+  if(parent) parent.appendChild(el);
+  return el;
 }
 
-// Draws the normal curve as the expected number of students per 10-mark bin
-// (n × 10 × pdf), on the same scale as the bars and centred on them.
-function drawBellCurve(ctx, marks, progress, pxPerStudent){
+// Population mean and standard deviation (the curve and the Std dev stat agree).
+function meanStd(marks){
   const n=marks.length;
   const mean=marks.reduce((a,b)=>a+b,0)/n;
-  const std=Math.sqrt(marks.reduce((a,b)=>a+(b-mean)**2,0)/n);
-  if(std===0) return; // all marks identical: the curve is undefined
-  ctx.strokeStyle="#5f5b78"; // --ink-muted
-  ctx.lineWidth=1.5;
-  ctx.setLineDash([6,4]);
-  ctx.beginPath();
-  const maxX=Math.floor(100*progress);
-  for(let x=0;x<=maxX;x++){
-    const pdf=(1/(std*Math.sqrt(2*Math.PI)))*
-      Math.exp(-0.5*((x-mean)/std)**2);
-    const px=42+((x-5)/10)*32; // mark 5 -> centre of bar 0 (x=42), 32px per bin
-    const py=210-n*10*pdf*pxPerStudent;
-    x===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
-  }
-  ctx.stroke();
+  return {mean, std:Math.sqrt(marks.reduce((a,b)=>a+(b-mean)**2,0)/n)};
 }
+
+// Rounds the y-axis up to a tidy maximum with at most ~5 integer ticks.
+function niceScale(maxValue){
+  const target=Math.max(1,maxValue);
+  for(const step of [1,2,5,10,20,25,50,100,200,500]){
+    if(target/step<=5) return {step, max:Math.ceil(target/step)*step};
+  }
+  return {step:1000, max:Math.ceil(target/1000)*1000};
+}
+
+function clearChart(){
+  hist.innerHTML="";
+  chart=null;
+  tooltip.hidden=true;
+}
+
+function buildChart(animate){
+  clearChart();
+  const marks=courseRows().map(d=>d["Total Marks"]);
+  const W=chartBox.clientWidth;
+  if(!marks.length || !W) return;
+
+  const H=W<500 ? 240 : 300;
+  const m={left:36,right:8,top:24,bottom:28};
+  const plotW=W-m.left-m.right, plotH=H-m.top-m.bottom;
+  const step=plotW/101;                       // width of one mark
+  const n=marks.length, {mean,std}=meanStd(marks);
+  const counts=Array(101).fill(0);
+  marks.forEach(x=>counts[x]++);
+  // Expected students per 1-mark bin is n × pdf; its peak is n/(std√2π).
+  // Scale to whichever is taller so neither bars nor curve leave the chart (#26).
+  const peak=std>0 ? n/(std*Math.sqrt(2*Math.PI)) : 0;
+  const scale=niceScale(Math.max(...counts,peak));
+  const x=mark=>m.left+mark*step;             // left edge of a mark's bar
+  const y=v=>m.top+plotH-v/scale.max*plotH;
+  const base=m.top+plotH;
+
+  hist.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  hist.setAttribute("height",H);
+  chart={W,H,m,step,x,y,base,counts,bands:{},bars:[],hits:[],handles:{}};
+
+  // Grade bands (tint + letter), positioned in updateChart().
+  const bandLayer=svgEl("g",{class:"bands"},hist);
+  GRADES.forEach(g=>{
+    chart.bands[g]={
+      rect:svgEl("rect",{y:m.top,height:plotH,style:`fill:var(${GRADE_COLOUR[g]});fill-opacity:.07`},bandLayer),
+      label:svgEl("text",{y:m.top-8,"text-anchor":"middle",class:"band-letter"},bandLayer)
+    };
+    chart.bands[g].label.textContent=g;
+  });
+
+  // Y axis: integer ticks with faint gridlines. X axis: a tick every 10 marks.
+  const axes=svgEl("g",{class:"axes","aria-hidden":"true"},hist);
+  for(let v=0;v<=scale.max;v+=scale.step){
+    svgEl("line",{x1:m.left,x2:W-m.right,y1:y(v),y2:y(v),class:"gridline"},axes);
+    svgEl("text",{x:m.left-6,y:y(v)+4,"text-anchor":"end"},axes).textContent=v;
+  }
+  svgEl("line",{x1:m.left,x2:W-m.right,y1:base,y2:base,class:"axis"},axes);
+  for(let v=0;v<=100;v+=10){
+    const cx=x(v)+step/2;
+    svgEl("line",{x1:cx,x2:cx,y1:base,y2:base+4,class:"axis"},axes);
+    svgEl("text",{x:cx,y:base+18,"text-anchor":"middle"},axes).textContent=v;
+  }
+
+  // Bars (only marks somebody scored). They grow once when a course opens.
+  const barLayer=svgEl("g",{class:"bars"+(animate?" grow":""),style:`transform-origin:0 ${base}px`},hist);
+  counts.forEach((c,mark)=>{
+    if(!c) return;
+    const gap=step>4 ? 1 : 0;
+    chart.bars[mark]=svgEl("rect",{x:x(mark)+gap/2,width:Math.max(1,step-gap),y:y(c),height:base-y(c),class:"bar","data-mark":mark},barLayer);
+  });
+
+  // Dashed normal curve through the bar centres; skipped when std = 0.
+  if(std>0){
+    let d="";
+    for(let v=0;v<=100;v++){
+      const pdf=Math.exp(-0.5*((v-mean)/std)**2)/(std*Math.sqrt(2*Math.PI));
+      d+=(v?"L":"M")+(x(v)+step/2).toFixed(2)+" "+y(n*pdf).toFixed(2);
+    }
+    svgEl("path",{d,class:"curve"},hist);
+  }
+
+  // Invisible full-height column per mark for hover tooltips.
+  const hitLayer=svgEl("g",{class:"hits"},hist);
+  for(let mark=0;mark<=100;mark++){
+    const r=svgEl("rect",{x:x(mark),width:step,y:m.top,height:plotH,class:"hit","data-mark":mark},hitLayer);
+    r.addEventListener("pointerenter",()=>showMarkTooltip(mark));
+    r.addEventListener("pointerleave",hideMarkTooltip);
+    chart.hits[mark]=r;
+  }
+
+  // Cutoff handles: pointer-only (the cutoff inputs are the keyboard route).
+  const handleLayer=svgEl("g",{class:"handles","aria-hidden":"true"},hist);
+  CUTOFF_GRADES.forEach(g=>{
+    const h=svgEl("g",{class:"cutoff-handle","data-grade":g},handleLayer);
+    // A narrow full-height grab strip, so hovering the bars either side of a
+    // cutoff (the marks that matter most) still shows their tooltips.
+    svgEl("rect",{class:"handle-hit",y:m.top,width:6,height:plotH},h);
+    svgEl("line",{class:"cutoff-line",y1:m.top,y2:base},h);
+    svgEl("rect",{class:"cutoff-knob",y:m.top+4,width:12,height:22,rx:3},h);
+    h.addEventListener("pointerdown",e=>startDrag(e,g,h));
+    chart.handles[g]=h;
+  });
+
+  updateChart();
+}
+
+// Moves bands and handles and recolours bars for the current cutoffs.
+function updateChart(){
+  if(!chart) return;
+  const {x,step,m}=chart;
+  GRADES.forEach(g=>{
+    const [from,to]=bandRange(g), b=chart.bands[g];
+    const left=x(from), width=(to-from+1)*step;
+    b.rect.setAttribute("x",left);
+    b.rect.setAttribute("width",width);
+    b.label.setAttribute("x",left+width/2);
+    b.label.style.display=width<14 ? "none" : ""; // too narrow for a letter
+  });
+  chart.bars.forEach((bar,mark)=>{
+    if(!bar) return;
+    const g=gradeFor(mark);
+    bar.style.fill=`var(${GRADE_COLOUR[g]})`;
+    // The two lightest ramp steps nearly vanish on white: outline them.
+    bar.style.stroke=(g==="D"||g==="E") ? "var(--g-C)" : "";
+  });
+  CUTOFF_GRADES.forEach(g=>{
+    const h=chart.handles[g], cx=x(cutoffs[g]); // boundary = left edge of the cutoff mark
+    h.querySelector(".handle-hit").setAttribute("x",cx-3);
+    const line=h.querySelector(".cutoff-line");
+    line.setAttribute("x1",cx); line.setAttribute("x2",cx);
+    h.querySelector(".cutoff-knob").setAttribute("x",cx-6);
+  });
+}
+
+// Dragging a handle snaps to whole marks and goes through setCutoff(), so it
+// obeys exactly the same limits as the inputs.
+function startDrag(e,g,handle){
+  e.preventDefault();
+  handle.setPointerCapture(e.pointerId);
+  handle.classList.add("dragging");
+  const move=ev=>{
+    const box=hist.getBoundingClientRect();
+    const px=(ev.clientX-box.left)*(chart.W/box.width);
+    const mark=Math.round((px-chart.m.left)/chart.step);
+    if(mark!==cutoffs[g]) setCutoff(g,mark);
+  };
+  const end=()=>{
+    handle.classList.remove("dragging");
+    handle.removeEventListener("pointermove",move);
+    handle.removeEventListener("pointerup",end);
+    handle.removeEventListener("pointercancel",end);
+  };
+  handle.addEventListener("pointermove",move);
+  handle.addEventListener("pointerup",end);
+  handle.addEventListener("pointercancel",end);
+}
+
+function tooltipText(mark){
+  const c=chart.counts[mark];
+  return `${mark} marks: ${c} ${c===1?"student":"students"} (${gradeFor(mark)})`;
+}
+function showMarkTooltip(mark){
+  if(!chart) return;
+  chart.hits.forEach((r,i)=>r.classList.toggle("active",i===mark));
+  tooltip.textContent=tooltipText(mark);
+  const box=hist.getBoundingClientRect(), k=box.width/chart.W;
+  const top=chart.counts[mark] ? chart.y(chart.counts[mark]) : chart.base;
+  tooltip.style.left=`${(chart.x(mark)+chart.step/2)*k}px`;
+  tooltip.style.top=`${top*k}px`;
+  tooltip.hidden=false;
+}
+function hideMarkTooltip(){
+  if(!chart) return;
+  chart.hits.forEach(r=>r.classList.remove("active"));
+  tooltip.hidden=true;
+}
+
+// Keyboard reading of the chart: one tab stop, arrows move between marks.
+let focusMark=null;
+hist.addEventListener("focus",()=>{
+  if(!chart) return;
+  if(focusMark===null){
+    const marks=courseRows().map(d=>d["Total Marks"]);
+    focusMark=Math.min(...marks);
+  }
+  showMarkTooltip(focusMark);
+});
+hist.addEventListener("blur",hideMarkTooltip);
+hist.addEventListener("keydown",e=>{
+  if(!chart) return;
+  const moves={ArrowLeft:-1,ArrowRight:1,PageDown:-10,PageUp:10};
+  if(e.key in moves) focusMark=Math.min(100,Math.max(0,focusMark+moves[e.key]));
+  else if(e.key==="Home") focusMark=0;
+  else if(e.key==="End") focusMark=100;
+  else return;
+  e.preventDefault();
+  showMarkTooltip(focusMark);
+});
+
+// Outlines one mark's bar (used by the borderline list).
+function highlightMark(mark){
+  if(!chart) return;
+  chart.bars.forEach((bar,i)=>{ if(bar) bar.classList.toggle("highlight",i===mark); });
+}
+
+// Screen-reader summary of the distribution.
+function updateChartSummary(rows,counts){
+  if(!rows.length){ chartSummary.textContent=""; return; }
+  const marks=rows.map(d=>d["Total Marks"]), {mean,std}=meanStd(marks);
+  const perGrade=GRADES.map(g=>{ const [a,b]=bandRange(g); return `${g} ${counts[g]} (${a} to ${b})`; }).join(", ");
+  chartSummary.textContent=`${rows.length} marks in ${course.value}, from ${Math.min(...marks)} to ${Math.max(...marks)}, `+
+    `mean ${mean.toFixed(2)}, standard deviation ${std.toFixed(2)}. Students per grade: ${perGrade}.`;
+}
+
+// Rebuild the chart when its width changes (layout switch, window resize).
+new ResizeObserver(()=>{
+  if(chart && chartBox.clientWidth!==chart.W) buildChart(false);
+}).observe(chartBox);
 
 function computeStats(){
   const m=data.filter(d=>d.Course===course.value)
     .map(d=>d["Total Marks"]).sort((a,b)=>a-b);
   if(!m.length){
-    ["min","max","avg","med"].forEach(id=>document.getElementById(id).textContent="—");
+    ["min","max","avg","med","std"].forEach(id=>document.getElementById(id).textContent="—");
     return;
   }
   min.textContent=m[0];
   max.textContent=m[m.length-1];
   avg.textContent=(m.reduce((a,b)=>a+b,0)/m.length).toFixed(2);
+  std.textContent=meanStd(m).std.toFixed(2);
   med.textContent=m.length%2?m[Math.floor(m.length/2)]
     :(m[m.length/2-1]+m[m.length/2])/2;
 }
