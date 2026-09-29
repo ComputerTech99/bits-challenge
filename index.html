@@ -231,7 +231,8 @@ button.enabled{
     </p>
     <p>
       Total Marks should be entered as whole numbers. Fractional values
-      should be rounded to the nearest integer (for example, 80.2 → 81).
+      are rounded to the nearest integer on upload (for example,
+      80.2 → 80 and 79.5 → 80).
     </p>
     <p>
       Students who did not appear for the trimester-end examination and are
@@ -393,7 +394,8 @@ function parseMarksSheet(sheet){
     else if(!Number.isFinite(marks)) errors.push(`Row ${rowNo}: marks "${raw}" is not a number`);
     else if(marks<0 || marks>100) errors.push(`Row ${rowNo}: marks ${raw} is outside 0–100`);
 
-    rows.push({"BITS ID":id, "Course":courseName, "Total Marks":marks});
+    // Grade bands are whole numbers, so round half-up (79.5 -> 80, 80.2 -> 80).
+    rows.push({"BITS ID":id, "Course":courseName, "Total Marks":Math.round(marks)});
   });
 
   if(!errors.length && !rows.length) errors.push("The file has no student rows.");

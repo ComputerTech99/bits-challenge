@@ -99,3 +99,15 @@ test("#6 a valid upload after a rejected one clears the error", async ({ page })
   await expect(page.locator("#course option")).toHaveCount(3);
   await expect(page.locator("#uploadError")).toBeEmpty();
 });
+
+test("#7 decimal marks are rounded half-up and every student is exported", async ({ page }) => {
+  await startGrading(page, "decimals.xlsx", "CS F211");
+  const { text } = await download(page);
+  expect(text).toContain("2023A7PS0001P,80,A");  // 79.5
+  expect(text).toContain("2023A7PS0002P,80,A");  // 80.2
+  expect(text).toContain("2023A7PS0003P,49,C");  // 49.49
+  expect(text).toContain("2023A7PS0004P,20,D");  // 19.5
+  expect(text).toContain("2023A7PS0005P,65,B");
+  await expect(page.locator(".file-guidance")).toContainText("80.2 → 80");
+  await expect(page.locator(".file-guidance")).not.toContainText("80.2 → 81");
+});
