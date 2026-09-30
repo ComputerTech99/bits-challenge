@@ -213,6 +213,10 @@ button:disabled{opacity:.45;cursor:not-allowed}
 #hist .cutoff-handle:hover .cutoff-line,#hist .cutoff-handle.dragging .cutoff-line{stroke:var(--accent);stroke-width:2.5}
 #hist .cutoff-handle:hover .cutoff-knob,#hist .cutoff-handle.dragging .cutoff-knob{stroke:var(--accent);fill:var(--accent)}
 #hist .cutoff-handle:hover .cutoff-label,#hist .cutoff-handle.dragging .cutoff-label{fill:#fff}#hist .handle-hit{fill:transparent}
+#hist .default-marker line{stroke:var(--ink-muted);stroke-width:1;stroke-dasharray:3 3;opacity:.6}
+#hist .default-hit{fill:transparent}
+#hist .default-label{opacity:0;paint-order:stroke;stroke:var(--surface);stroke-width:3px}
+#hist .default-marker:hover .default-label{opacity:1}
 #hist .bars.grow{animation:grow .45s ease-out}
 @keyframes grow{from{transform:scaleY(0)}}
 .tooltip{
@@ -1115,7 +1119,7 @@ function buildChart(animate){
 
   hist.setAttribute("viewBox",`0 0 ${W} ${H}`);
   hist.setAttribute("height",H);
-  chart={W,H,m,step,x,y,base,counts,bands:{},bars:[],hits:[],handles:{}};
+  chart={W,H,m,step,x,y,base,counts,bands:{},bars:[],hits:[],defaults:{},handles:{}};
 
   // Grade bands (tint + letter), positioned in updateChart().
   const bandLayer=svgEl("g",{class:"bands"},hist);
@@ -1167,6 +1171,20 @@ function buildChart(animate){
     chart.hits[mark]=r;
   }
 
+  // Where each cutoff started: a faint dashed line, shown only once the cutoff
+  // has moved, with a "default 80" label on hover. Above the hover columns
+  // (so it can be hovered) and below the handles (so it never blocks a drag).
+  const defaultLayer=svgEl("g",{class:"defaults","aria-hidden":"true"},hist);
+  CUTOFF_GRADES.forEach(g=>{
+    const cx=x(DEFAULT_CUTOFFS[g]);
+    const d=svgEl("g",{class:"default-marker","data-grade":g},defaultLayer);
+    svgEl("rect",{class:"default-hit",x:cx-4,y:m.top,width:8,height:plotH},d);
+    svgEl("line",{x1:cx,x2:cx,y1:m.top,y2:base},d);
+    const label=svgEl("text",{class:"default-label",x:cx+4,y:base-8},d);
+    label.textContent=`default ${DEFAULT_CUTOFFS[g]}`;
+    chart.defaults[g]=d;
+  });
+
   // Cutoff handles: pointer-only (the cutoff inputs are the keyboard route).
   // Each has a full-height grab strip, 24px wide (44px for touch), centred on
   // its line. The strip covers the bars either side of a cutoff (the marks
@@ -1217,6 +1235,7 @@ function updateChart(){
     const line=h.querySelector(".cutoff-line");
     line.setAttribute("x1",cx); line.setAttribute("x2",cx);
     h.querySelector(".cutoff-label").textContent=`${g} ${cutoffs[g]}`;
+    chart.defaults[g].style.display=cutoffs[g]===DEFAULT_CUTOFFS[g] ? "none" : "";
   });
   layoutPills();
 }

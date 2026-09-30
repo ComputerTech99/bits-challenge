@@ -152,6 +152,22 @@ lines could be dragged at all.
 
 Screenshots checked at 1440 and 390.
 
+### Stage 2B follow-up: where the default was
+
+**Problem.** Once a line has been dragged, the chart no longer shows where it started, so
+there's no way to see how far you've moved from the institute's defaults.
+
+**Solution.** When a cutoff differs from its default, a faint dashed line (muted ink, 60%
+opacity) marks the default position. Hovering it shows "default 80". It sits above the
+tooltip columns so it can be hovered, and below the handles so it never blocks a drag. It
+disappears once the cutoff is back at its default.
+
+**How tested.** `E2+` default-marker test:
+- All 7 markers are hidden at the defaults.
+- Moving A to 78 shows only A's marker, drawn at the left edge of mark 80.
+- Its label is invisible until hovered, then reads "default 80".
+- Typing 80 again hides it.
+
 ## E3: Borderline students
 
 **Problem.** The real grading decision is rarely "is 80 the right number". It's

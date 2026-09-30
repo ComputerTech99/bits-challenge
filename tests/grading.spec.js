@@ -1228,6 +1228,28 @@ test("E2+: the label updates live and the handle is active while dragging", asyn
   await expect(page.locator('.cutoff-handle[data-grade="A"]')).not.toHaveClass(/dragging/);
 });
 
+test("E2+: a faint marker shows the default position of a moved cutoff, labelled on hover", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  const markers = page.locator("#hist .default-marker");
+  await expect(markers).toHaveCount(7);
+  for (const m of await markers.all()) await expect(m).toBeHidden(); // all at default
+  await typeCutoff(page, "A", 78);
+  const a = page.locator('#hist .default-marker[data-grade="A"]');
+  await expect(a).toBeVisible();
+  await expect(page.locator('#hist .default-marker[data-grade="B"]')).toBeHidden();
+  // Drawn at the default boundary (the left edge of mark 80), not at 78.
+  const lineX = await a.locator("line").evaluate(l => Number(l.getAttribute("x1")));
+  expect(lineX).toBeCloseTo((await chartGeometry(page)).hitX[80], 1);
+  const label = a.locator(".default-label");
+  await expect(label).toHaveText("default 80");
+  await expect(label).toHaveCSS("opacity", "0");
+  const box = await a.locator(".default-hit").boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height - 40);
+  await expect(label).toHaveCSS("opacity", "1");
+  await typeCutoff(page, "A", 80);
+  await expect(a).toBeHidden();
+});
+
 // Bounding boxes of the pills, which must never overlap (they stagger when narrow).
 async function pillsOverlap(page) {
   const boxes = await page.locator("#hist .cutoff-knob").evaluateAll(els => els.map(e => e.getBoundingClientRect()).map(r => ({ l: r.left, r: r.right, t: r.top, b: r.bottom })));
