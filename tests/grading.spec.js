@@ -1629,6 +1629,19 @@ test("#35 Reset to defaults uses no native confirm() anywhere", async ({ page })
   expect(dialogs).toEqual([]);
 });
 
+test("#40 choosing the same file again reloads it", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await typeCutoff(page, "A", 78);
+  // The identical file, twice in a row (e.g. after fixing it in Excel).
+  await upload(page, "demo_marks.xlsx");
+  await expect(page.locator("body")).not.toHaveClass(/grading/); // a fresh load closes the course
+  await expect(page.locator("#course")).toHaveValue("");
+  await expect(page.locator("#restoreNotice")).toBeVisible();   // and autosave offers the cutoffs back
+  await page.selectOption("#course", INTRO);
+  await expect(cutoffInput(page, "A")).toHaveValue("78");
+  await expect(page.locator("#file")).toHaveValue("");          // cleared, ready for a third time
+});
+
 // ===== #38: the spreadsheet reader fails to load =====
 // Routes added here take precedence over openApp()'s route that serves the CDN copy.
 const CDN_SHEETJS = "**/npm/xlsx*/dist/xlsx.full.min.js", LOCAL_SHEETJS = "**/assets/xlsx.full.min.js";

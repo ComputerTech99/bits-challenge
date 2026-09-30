@@ -1151,7 +1151,13 @@ function loadFile(f){
   r.readAsArrayBuffer(f);
 }
 
-file.onchange=e=>loadFile(e.target.files[0]);
+// Clear the input once the file is taken, so choosing the same file again
+// (e.g. after fixing it in Excel) fires change and reloads it (#40).
+file.onchange=e=>{
+  const f=e.target.files[0];
+  e.target.value="";
+  loadFile(f);
+};
 
 // Drag and drop onto the zone uses the same loader as the picker.
 dropzone.addEventListener("dragover",e=>{ e.preventDefault(); dropzone.classList.add("dragover"); });
