@@ -476,8 +476,8 @@ test("#25 an unreadable file shows an inline error instead of throwing", async (
 test("happy path: upload, select course, adjust a cutoff, export the right grades", async ({ page }) => {
   await startGrading(page, "valid_basic.xlsx", "CS F211");
   // Stage 2: the name is shown as typed, never upper-cased (the welcome line
-  // that used to show it was cut in the polish pass; the app bar shows it).
-  await expect(page.locator("#ctxInstructor")).toHaveText("Dr Rao");
+  // that used to show it was cut in the polish pass; since 2C the setup summary shows it).
+  await expect(page.locator("#sumInstructor")).toHaveText("Dr Rao");
   await expect(page.locator("#grades input[type=number]")).toHaveCount(7);
   await expect(page.locator("#reviewBtn")).toBeEnabled();
 
@@ -660,9 +660,10 @@ test("setup: the sample file link points at the demo file", async ({ page, reque
 
 test("setup: collapses to a summary once a course is open, and Edit expands it", async ({ page }) => {
   await startGrading(page, "demo_marks.xlsx", "Introduction to Programming");
-  // #33: the instructor and course live in the app bar only.
-  // E6: the course count is part of the progress ("0 of 3 courses downloaded").
-  await expect(page.locator("#setupSummaryText")).toHaveText("demo_marks.xlsx · 148 students · 0 of 3 courses downloaded");
+  // Stage 2C: label/value pairs instead of a "·" string; the instructor and
+  // class size moved here from the app bar. E6: progress is "N of M courses".
+  await expect(page.locator("#setupSummaryText dt")).toHaveText(["File", "Instructor", "Class size", "Downloaded"]);
+  await expect(page.locator("#setupSummaryText dd")).toHaveText(["demo_marks.xlsx", "Dr Rao", "64", "0 of 3 courses"]);
   await expect(page.locator("#instructor")).toBeHidden();
   await expect(page.locator("#course")).toBeVisible(); // switching course stays one click away
   await page.click("#editSetup");
@@ -683,14 +684,17 @@ test("empty state says what to do next, before and after a file is loaded", asyn
   await expect(page.locator(".workspace")).toBeVisible();
 });
 
-test("app bar shows instructor, course, class size and timer only once grading starts", async ({ page }) => {
+// Stage 2C: the app bar keeps only the course and the grading time; the
+// instructor and class size are checked in the setup summary instead.
+test("app bar shows the course and timer only once grading starts; the summary has instructor and class size", async ({ page }) => {
   await expect(page.locator("#appContext")).toBeHidden();
   await startGrading(page, "demo_marks.xlsx", "Introduction to Programming");
   await expect(page.locator("#appContext")).toBeVisible();
-  await expect(page.locator("#ctxInstructor")).toHaveText("Dr Rao");
   await expect(page.locator("#ctxCourse")).toHaveText("Introduction to Programming");
-  await expect(page.locator("#ctxCount")).toHaveText("64");
   await expect(page.locator("#timerText")).toBeVisible();
+  await expect(page.locator("#appContext")).not.toContainText("Dr Rao");
+  await expect(page.locator("#sumInstructor")).toHaveText("Dr Rao");
+  await expect(page.locator("#sumCount")).toHaveText("64");
 });
 
 // ===== E1: cutoff editor =====
@@ -1063,10 +1067,10 @@ test("a11y: errors, notes and count changes are announced", async ({ page }) => 
 });
 
 test("a11y: the whole flow works from the keyboard alone", async ({ page }) => {
-  // Stage 2B (E8): the theme switch in the app bar is the first stop (one stop
-  // for the whole radio group), then the name field.
+  // Stage 2B (E8): the theme control in the app bar is the first stop (since
+  // 2C one icon button), then the name field.
   await page.keyboard.press("Tab");
-  await expect(page.locator('.theme-switch input[value="system"]')).toBeFocused();
+  await expect(page.locator("#themeBtn")).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.locator("#instructor")).toBeFocused();
   await page.keyboard.type("Dr Rao");
@@ -1219,12 +1223,13 @@ async function touchSwipe(page, from, to, steps = 12) {
   await page.waitForTimeout(300); // let any scroll settle
 }
 
-test("#33 the instructor and course are shown once, in the app bar", async ({ page }) => {
+// Stage 2C: still shown once each, but the instructor moved to the summary.
+test("#33 the course is shown once in the app bar, the instructor once in the setup summary", async ({ page }) => {
   await startGrading(page, "demo_marks.xlsx", INTRO);
-  for (const text of ["Dr Rao", INTRO]) {
-    await expect(page.locator("#appContext")).toContainText(text);
-    await expect(page.locator("#setupSummary")).not.toContainText(text);
-  }
+  await expect(page.locator("#appContext")).toContainText(INTRO);
+  await expect(page.locator("#setupSummary")).not.toContainText(INTRO);
+  await expect(page.locator("#setupSummary")).toContainText("Dr Rao");
+  await expect(page.locator("#appContext")).not.toContainText("Dr Rao");
 });
 
 // ===== Stage 2B: E2 follow-ups (chart) =====
@@ -1463,16 +1468,16 @@ test("E6: each course shows Not started, In progress or Downloaded", async ({ pa
   await startGrading(page, "demo_marks.xlsx", INTRO);
   expect(await optionLabel(page, INTRO)).toBe(`${INTRO} · Not started`);
   expect(await optionLabel(page, "Linear Algebra")).toBe("Linear Algebra · Not started");
-  await expect(page.locator("#setupSummaryText")).toHaveText("demo_marks.xlsx · 148 students · 0 of 3 courses downloaded");
+  await expect(page.locator("#sumProgress")).toHaveText("0 of 3 courses");
   await typeCutoff(page, "A", 78);
   expect(await optionLabel(page, INTRO)).toBe(`${INTRO} · In progress`);
   await download(page);
   expect(await optionLabel(page, INTRO)).toBe(`${INTRO} · Downloaded`);
-  await expect(page.locator("#setupSummaryText")).toHaveText("demo_marks.xlsx · 148 students · 1 of 3 courses downloaded");
+  await expect(page.locator("#sumProgress")).toHaveText("1 of 3 courses");
   // A change after downloading means the file no longer matches: in progress again.
   await typeCutoff(page, "B", 62);
   expect(await optionLabel(page, INTRO)).toBe(`${INTRO} · In progress`);
-  await expect(page.locator("#setupSummaryText")).toContainText("0 of 3 courses downloaded");
+  await expect(page.locator("#sumProgress")).toHaveText("0 of 3 courses");
   await page.click("#undoBtn"); // back to exactly what was downloaded
   expect(await optionLabel(page, INTRO)).toBe(`${INTRO} · Downloaded`);
 });
@@ -1625,8 +1630,18 @@ test("E7: no match says so, naming the course", async ({ page }) => {
 const bodyBg = page => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
 const LIGHT_CANVAS = "rgb(245, 244, 250)", DARK_CANVAS = "rgb(18, 17, 32)";
 
+// Stage 2C: the segmented radios became one icon button with a menu of
+// menuitemradio items; these tests drive the menu instead of the radios.
+const themeItem = (page, value) => page.locator(`#themeMenu [data-value="${value}"]`);
+async function chooseTheme(page, name) {
+  await page.click("#themeBtn");
+  await page.getByRole("menuitemradio", { name }).click();
+  await expect(page.locator("#themeMenu")).toBeHidden();
+}
+
 test("E8: follows the system theme by default", async ({ page }) => {
-  await expect(page.locator('.theme-switch input[value="system"]')).toBeChecked();
+  await expect(themeItem(page, "system")).toHaveAttribute("aria-checked", "true");
+  await expect(page.locator("#themeBtn")).toHaveAttribute("aria-label", "Theme: System");
   expect(await bodyBg(page)).toBe(LIGHT_CANVAS);
   await page.emulateMedia({ colorScheme: "dark" });
   expect(await bodyBg(page)).toBe(DARK_CANVAS);
@@ -1634,25 +1649,45 @@ test("E8: follows the system theme by default", async ({ page }) => {
 
 test("E8: Light and Dark override the system, and the choice survives a reload", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark" });
-  await page.getByRole("radio", { name: "Light" }).check();
+  await chooseTheme(page, "Light");
   expect(await bodyBg(page)).toBe(LIGHT_CANVAS);
   await page.reload();
-  await expect(page.locator('.theme-switch input[value="light"]')).toBeChecked();
+  await expect(themeItem(page, "light")).toHaveAttribute("aria-checked", "true");
   expect(await bodyBg(page)).toBe(LIGHT_CANVAS);
   await page.emulateMedia({ colorScheme: "light" });
-  await page.getByRole("radio", { name: "Dark" }).check();
+  await chooseTheme(page, "Dark");
   expect(await bodyBg(page)).toBe(DARK_CANVAS);
-  await page.getByRole("radio", { name: "System" }).check();
+  await chooseTheme(page, "System");
   expect(await bodyBg(page)).toBe(LIGHT_CANVAS);
   await page.reload();
-  await expect(page.locator('.theme-switch input[value="system"]')).toBeChecked();
+  await expect(themeItem(page, "system")).toHaveAttribute("aria-checked", "true");
 });
 
-test("E8: the theme switch works from the keyboard", async ({ page }) => {
-  await page.locator('.theme-switch input[value="system"]').focus();
-  await page.keyboard.press("ArrowLeft"); // radios: arrows move the choice
-  await expect(page.locator('.theme-switch input[value="dark"]')).toBeChecked();
+test("E8: the theme menu works from the keyboard", async ({ page }) => {
+  const btn = page.locator("#themeBtn");
+  await btn.focus();
+  await page.keyboard.press("Enter");
+  await expect(btn).toHaveAttribute("aria-expanded", "true");
+  await expect(themeItem(page, "system")).toBeFocused(); // opens on the current choice
+  await page.keyboard.press("Escape");                  // Escape closes, focus returns
+  await expect(page.locator("#themeMenu")).toBeHidden();
+  await expect(btn).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowUp");                 // System -> Dark
+  await expect(themeItem(page, "dark")).toBeFocused();
+  await page.keyboard.press("Enter");
   expect(await bodyBg(page)).toBe(DARK_CANVAS);
+  await expect(page.locator("#themeMenu")).toBeHidden();
+  await expect(btn).toBeFocused();
+  await expect(btn).toHaveAttribute("aria-label", "Theme: Dark");
+});
+
+test("E8: the theme menu closes on a click elsewhere, without changing the theme", async ({ page }) => {
+  await page.click("#themeBtn");
+  await expect(page.locator("#themeMenu")).toBeVisible();
+  await page.mouse.click(5, 400);
+  await expect(page.locator("#themeMenu")).toBeHidden();
+  expect(await bodyBg(page)).toBe(LIGHT_CANVAS);
 });
 
 test("E8: the dark tokens are the same whether chosen or from the system", async ({ page }) => {
@@ -1667,7 +1702,7 @@ test("E8: the dark tokens are the same whether chosen or from the system", async
   await page.emulateMedia({ colorScheme: "dark" });
   const fromSystem = await tokens();
   await page.emulateMedia({ colorScheme: "light" });
-  await page.getByRole("radio", { name: "Dark" }).check();
+  await chooseTheme(page, "Dark");
   expect(await tokens()).toEqual(fromSystem);
   expect(fromSystem["--canvas"]).toBe("#121120");
 });
@@ -1830,8 +1865,10 @@ test("a11y: keyboard-only walkthrough of the Stage 2B flow", async ({ page }) =>
   await page.keyboard.press("L"); // Linear Algebra
   await expect(page.locator("#ctxCourse")).toHaveText("Linear Algebra");
   await expect(page.locator(`#course option[value="${INTRO}"]`)).toHaveText(`${INTRO} · Downloaded`);
-  await tabTo(page, '.theme-switch input[value="system"]', { back: true });
-  await page.keyboard.press("ArrowLeft");
+  await tabTo(page, "#themeBtn", { back: true });
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("ArrowUp"); // System -> Dark
+  await page.keyboard.press("Enter");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 });
 

@@ -58,6 +58,12 @@ const STATES = {
     await page.waitForTimeout(700);
     await page.fill("#findId", "20247");
   },
+  "theme-menu": async page => {
+    await startGrading(page, DEMO, COURSE);
+    await page.waitForTimeout(700);
+    await page.focus("#themeBtn");
+    await page.keyboard.press("Enter");
+  },
   "cutoff-moved": async page => {
     await startGrading(page, DEMO, COURSE);
     await typeCutoff(page, "A", 78);
