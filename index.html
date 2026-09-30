@@ -1075,13 +1075,15 @@ function meanStd(marks){
   return {mean, std:Math.sqrt(marks.reduce((a,b)=>a+(b-mean)**2,0)/n)};
 }
 
-// Rounds the y-axis up to a tidy maximum with at most ~5 integer ticks.
+// The y-axis ends on the first integer tick strictly above the highest point
+// (tallest bar or curve peak), so nothing touches the top (#34). At most 5 ticks.
 function niceScale(maxValue){
-  const target=Math.max(1,maxValue);
-  for(const step of [1,2,5,10,20,25,50,100,200,500]){
-    if(target/step<=5) return {step, max:Math.ceil(target/step)*step};
+  const target=Math.max(0,maxValue);
+  for(const step of [1,2,5,10,20,25,50,100,200,500,1000]){
+    const max=(Math.floor(target/step)+1)*step;
+    if(max/step<=5) return {step,max};
   }
-  return {step:1000, max:Math.ceil(target/1000)*1000};
+  return {step:2000, max:(Math.floor(target/2000)+1)*2000};
 }
 
 function clearChart(){

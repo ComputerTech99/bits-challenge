@@ -1244,6 +1244,28 @@ for (const width of [1440, 390]) {
   });
 }
 
+for (const [file, courseName] of [["demo_marks.xlsx", INTRO], ["large_class.xlsx", "CS F211"], ["identical_marks.xlsx", "CS F211"]]) {
+  test(`#34 the y-axis ends on the next tick above the tallest bar and the curve (${file})`, async ({ page }) => {
+    await startGrading(page, file, courseName);
+    const g = await chartGeometry(page);
+    const ticks = await page.locator("#hist .axes text[text-anchor=end]").allTextContents().then(t => t.map(Number));
+    const top = Math.max(...ticks);
+    expect(ticks.every(Number.isInteger)).toBe(true);
+    const marks = fixtureMarks(file, courseName), counts = {};
+    marks.forEach(m => { counts[m] = (counts[m] || 0) + 1; });
+    const mean = marks.reduce((a, b) => a + b) / marks.length;
+    const std = Math.sqrt(marks.reduce((a, b) => a + (b - mean) ** 2, 0) / marks.length);
+    const peak = std > 0 ? marks.length / (std * Math.sqrt(2 * Math.PI)) : 0; // curve's highest point
+    const highest = Math.max(...Object.values(counts), peak);
+    expect(top).toBeGreaterThan(highest);                        // headroom above bars and curve
+    const step = ticks[1] - ticks[0];
+    expect(top - step).toBeLessThanOrEqual(highest);             // ...but only one tick of it
+    // Neither the bars nor the curve reach the top gridline.
+    expect(Math.min(...g.bars.map(b => b.y))).toBeGreaterThan(g.plotTop + 1);
+    if (g.curve.length) expect(Math.min(...g.curve.map(([, y]) => y))).toBeGreaterThan(g.plotTop + 1);
+  });
+}
+
 test.describe("#32 touch at 390px", () => {
   test.use({ viewport: { width: 390, height: 700 }, hasTouch: true, isMobile: true });
 
