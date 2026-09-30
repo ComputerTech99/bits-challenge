@@ -569,6 +569,7 @@ rewritten to check the same guarantee through the new UI. None was deleted.
 |---|---|
 | 1 | **Chart colour.** Every bar is one neutral `--bar` tone. Only focused bars (hovered or keyboard-read, found by the search, hovered in the borderline list) use `--bar-focus`. The eight band tints are gone; every other band has a barely visible `--band-alt` shade. Cutoff lines use the accent. The bell curve is unchanged. |
 | 2 | **One label row.** The band-letter row is gone. The handle pills ("A 80", 12px, weight 500, neutral border) now sit in that row above the plot instead of over the bars. They turn accent (border and text, no fill) only on hover or drag. If any two full labels would touch, every pill shows its value only ("80"). If even values touch (adjacent cutoffs on a narrow chart), the later pill drops just inside the plot. |
+| 3 | **Neutral chips.** Every grade chip is `--surface` with a 1px `--rule` border and `--ink` text; the letter carries the meaning. The eight `--g-*` tokens and their chip-text tokens are gone. The distribution table (sidebar and review) shows share as a slim `--bar` bar, scaled to the largest grade, before the % figure. The bar is `aria-hidden`; the number is what's read. |
 
 ### Tests rewritten in Stage 2C
 
@@ -577,4 +578,5 @@ rewritten to check the same guarantee through the new UI. None was deleted.
 | E2: one bar per scored mark (was "coloured by the grade") | 2C-1: bars no longer carry a grade colour. | Bar 79 has `data-grade="A-"`, and `"A"` once A starts at 79. |
 | a11y: bar contrast (was "3:1 against its grade band") | 2C-1: one bar tone over the surface or the alternate band shade. | Bar ≥ 3:1 against the surface and against every shaded band. All bars share one fill. |
 | E2+: handle labels never overlap at 1440/390 | 2C-2: labels collapse to values when they would collide. | Still no overlap, before and after A- moves next to A. Added: full "A 80…" labels at 1440, values only at 390. |
+| a11y: chip text AA (was "every grade-ramp step") | 2C-3: chips are neutral. | Chip text ≥ 4.5:1, and all eight chips share one background and text colour. New test: share bars are scaled to the largest grade and `aria-hidden`. |
 | E8: chips AA and bars 3:1 per theme | 2C-1 | Same bar check in light and dark. Added: a searched (focused) bar is ≥ 2:1 from the neutral bar and clearly violet. |

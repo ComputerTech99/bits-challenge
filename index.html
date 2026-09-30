@@ -28,16 +28,6 @@
      alternate band shade); only focused bars (hover, search, borderline) use
      --bar-focus. Colour is information, not decoration. */
   --bar:#8f8ca0; --bar-focus:var(--accent); --band-alt:#f8f7fc;
-  /* Grade colours: one hue per letter, the minus grade a lighter tint of it.
-     Every bar has at least 3:1 against its band tint, and chip text is AA. */
-  --g-A:#3b2a9e; --g-Am:#7764d7;   /* indigo */
-  --g-B:#1f64a8; --g-Bm:#5593cf;   /* blue */
-  --g-C:#16806f; --g-Cm:#479c8d;   /* teal */
-  --g-D:#a8661a;                   /* amber */
-  --g-E:#6b6f85;                   /* slate: never red, E is not an error */
-  /* Chip text on each grade colour. */
-  --g-A-on:#ffffff; --g-Am-on:#ffffff; --g-B-on:#ffffff; --g-Bm-on:#1c1a33;
-  --g-C-on:#ffffff; --g-Cm-on:#1c1a33; --g-D-on:#ffffff; --g-E-on:#ffffff;
   --font:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   --radius-panel:12px; --radius-control:8px;
 }
@@ -55,13 +45,6 @@
   --shadow:0 24px 48px rgba(0,0,0,.5); --backdrop:rgba(0,0,0,.6);
   --logo-plate:#f5f4fa; --logo-pad:4px 8px;
   --bar:#6e6b88; --bar-focus:#c4b5ff; --band-alt:#201f35;
-  --g-A:#6b59d3; --g-Am:#9080de;
-  --g-B:#226db7; --g-Bm:#5593cf;
-  --g-C:#16806f; --g-Cm:#479c8d;
-  --g-D:#a8661a;
-  --g-E:#6b6f85;
-  --g-A-on:#ffffff; --g-Am-on:#121120; --g-B-on:#ffffff; --g-Bm-on:#121120;
-  --g-C-on:#ffffff; --g-Cm-on:#121120; --g-D-on:#ffffff; --g-E-on:#ffffff;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
@@ -74,13 +57,6 @@
     --shadow:0 24px 48px rgba(0,0,0,.5); --backdrop:rgba(0,0,0,.6);
     --logo-plate:#f5f4fa; --logo-pad:4px 8px;
     --bar:#6e6b88; --bar-focus:#c4b5ff; --band-alt:#201f35;
-    --g-A:#6b59d3; --g-Am:#9080de;
-    --g-B:#226db7; --g-Bm:#5593cf;
-    --g-C:#16806f; --g-Cm:#479c8d;
-    --g-D:#a8661a;
-    --g-E:#6b6f85;
-    --g-A-on:#ffffff; --g-Am-on:#121120; --g-B-on:#ffffff; --g-Bm-on:#121120;
-    --g-C-on:#ffffff; --g-Cm-on:#121120; --g-D-on:#ffffff; --g-E-on:#ffffff;
   }
 }
 
@@ -355,11 +331,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 }
 .stat b{font-size:16px;font-weight:600;color:var(--ink)}
 
-/* ===== GRADE COLOURS (chip text meets WCAG AA: white, or ink on B- and C-) ===== */
-.g-A{background:var(--g-A);color:var(--g-A-on)}  .g-Am{background:var(--g-Am);color:var(--g-Am-on)}
-.g-B{background:var(--g-B);color:var(--g-B-on)}  .g-Bm{background:var(--g-Bm);color:var(--g-Bm-on)}
-.g-C{background:var(--g-C);color:var(--g-C-on)}  .g-Cm{background:var(--g-Cm);color:var(--g-Cm-on)}
-.g-D{background:var(--g-D);color:var(--g-D-on)}  .g-E{background:var(--g-E);color:var(--g-E-on)}
+/* ===== GRADE CHIPS: neutral; the letter carries the meaning ===== */
 .chip{
   display:inline-flex;
   align-items:center;
@@ -367,7 +339,10 @@ button:disabled{opacity:.45;cursor:not-allowed}
   min-width:32px;
   height:24px;
   padding:0 8px;
+  border:1px solid var(--rule);
   border-radius:999px;
+  background:var(--surface);
+  color:var(--ink);
   font-size:12px;
   font-weight:600;
 }
@@ -417,6 +392,11 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .dist tbody tr:last-child th,.dist tbody tr:last-child td{border-bottom:none}
 .dist .n{text-align:right}
 .dist td.n b{font-weight:600}
+/* Share: a slim neutral bar (scaled to the largest grade) before the number. */
+.dist .share{width:40%}
+.share-cell{display:flex;align-items:center;justify-content:flex-end;gap:8px}
+.share-track{flex:1;display:flex;min-width:0}
+.share-bar{height:4px;border-radius:2px;background:var(--bar)}
 /* ===== BORDERLINE STUDENTS ===== */
 .bl-controls{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:12px;color:var(--ink-muted)}
 .bl-controls label{font-weight:400;color:var(--ink-muted)}
@@ -818,8 +798,8 @@ function setCutoff(g,value){
   return cutoffs[g];
 }
 
-// CSS class for a grade's ramp colour ("A-" -> "g-Am").
-function gradeClass(g){ return "g-"+g.replace("-","m"); }
+// A grade as an id-safe slug ("A-" -> "Am").
+function gradeSlug(g){ return g.replace("-","m"); }
 
 function courseRows(){ return data.filter(d=>d.Course===course.value); }
 
@@ -1072,7 +1052,7 @@ function buildCutoffEditor(){
     const row=document.createElement("div");
     row.className="cutoff-row";
     row.innerHTML=`
-      <label for="${id}"><span class="chip ${gradeClass(g)}">${g}</span> from</label>
+      <label for="${id}"><span class="chip">${g}</span> from</label>
       <div class="stepper">
         <!-- −/+ are for pointers; keyboard users step with ↑/↓ in the input, so
              the buttons stay out of the tab order (7 stops instead of 21). -->
@@ -1111,7 +1091,7 @@ function buildCutoffEditor(){
   });
   const e=document.createElement("div");
   e.className="cutoff-row";
-  e.innerHTML=`<span class="fixed-label"><span class="chip g-E">E</span> from</span>
+  e.innerHTML=`<span class="fixed-label"><span class="chip">E</span> from</span>
     <span class="fixed-value">0 (fixed)</span><span class="range num" id="range-E"></span>`;
   grades.appendChild(e);
 }
@@ -1159,13 +1139,16 @@ function announceCounts(counts){
 
 function renderDistribution(counts,total,tbody=gradeSummary){
   tbody.innerHTML="";
+  const most=Math.max(...GRADES.map(g=>counts[g]));
   GRADES.forEach(g=>{
     const [from,to]=bandRange(g);
     const share=total ? (100*counts[g]/total).toFixed(1)+"%" : "—";
+    const bar=most ? (100*counts[g]/most).toFixed(1) : 0; // the % text carries the value
     const tr=document.createElement("tr");
     tr.dataset.grade=g;
-    tr.innerHTML=`<th scope="row"><span class="chip ${gradeClass(g)}">${g}</span></th>
-      <td class="num">${from}–${to}</td><td class="n num"><b>${counts[g]}</b></td><td class="n num">${share}</td>`;
+    tr.innerHTML=`<th scope="row"><span class="chip">${g}</span></th>
+      <td class="num">${from}–${to}</td><td class="n num"><b>${counts[g]}</b></td>
+      <td class="n num share"><span class="share-cell"><span class="share-track" aria-hidden="true"><span class="share-bar" style="width:${bar}%"></span></span>${share}</span></td>`;
     tbody.appendChild(tr);
   });
 }
@@ -1232,7 +1215,7 @@ function renderBorderline(rows){
       btn.disabled=true;
       const why=document.createElement("p");
       why.className="help";
-      why.id=`bl-why-${gradeClass(g)}`;
+      why.id=`bl-why-g-${gradeSlug(g)}`;
       why.textContent=`${below} starts at ${cutoffs[below]}, so ${g} can't move down to ${to}.`;
       btn.setAttribute("aria-describedby",why.id);
       div.appendChild(why);
@@ -1657,7 +1640,7 @@ function updateFind(){
       matches.slice(0,FIND_SHOWN).forEach(d=>{
         const g=gradeFor(d["Total Marks"]);
         const li=document.createElement("li");
-        li.innerHTML=`<span></span> · <b class="num">${d["Total Marks"]}</b> · <span class="chip ${gradeClass(g)}">${g}</span>`;
+        li.innerHTML=`<span></span> · <b class="num">${d["Total Marks"]}</b> · <span class="chip">${g}</span>`;
         li.firstChild.textContent=d["BITS ID"]; // IDs come from the file: never as HTML
         ul.appendChild(li);
       });

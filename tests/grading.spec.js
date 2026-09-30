@@ -1009,12 +1009,28 @@ function contrast(a, b) {
   return (x + 0.05) / (y + 0.05);
 }
 
-test("a11y: text on every grade-ramp step meets WCAG AA (4.5:1)", async ({ page }) => {
+// Stage 2C: chips are neutral (surface, rule border, ink text). Rewritten
+// from one AA check per grade-ramp colour.
+test("a11y: grade chips are neutral and their text meets WCAG AA (4.5:1)", async ({ page }) => {
   await startGrading(page, "demo_marks.xlsx", INTRO);
   const chips = await page.locator("#gradeSummary .chip").evaluateAll(els =>
     els.map(e => ({ g: e.textContent, fg: getComputedStyle(e).color, bg: getComputedStyle(e).backgroundColor })));
   expect(chips).toHaveLength(8);
   for (const c of chips) expect.soft(contrast(c.fg, c.bg), `grade ${c.g}`).toBeGreaterThanOrEqual(4.5);
+  expect(new Set(chips.map(c => c.bg + c.fg)).size).toBe(1); // no colour per grade
+});
+
+test("Stage 2C: each distribution row has a share bar scaled to the largest grade", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  const rows = await page.locator("#gradeSummary tr").evaluateAll(trs => trs.map(tr => ({
+    n: Number(tr.querySelector("td b").textContent),
+    w: parseFloat(tr.querySelector(".share-bar").style.width),
+    hidden: tr.querySelector(".share-track").getAttribute("aria-hidden") })));
+  const most = Math.max(...rows.map(r => r.n));
+  for (const r of rows) {
+    expect(r.w).toBeCloseTo(100 * r.n / most, 0);
+    expect(r.hidden).toBe("true"); // the % text is what assistive tech reads
+  }
 });
 
 // Stage 2C: every bar is the same neutral tone over either the bare surface or
