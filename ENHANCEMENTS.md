@@ -13,6 +13,7 @@ the end of a trimester:
 | E6 | "Which of my courses are done, and will a refresh lose my work?" | Per-course progress and autosave |
 | E7 | "A student asks: what did I get?" | Find a student |
 | E8 | "I grade late at night, and the white page glares." | Dark mode |
+| E9 | "Whose grade am I actually changing?" | Impact of changes in the review |
 
 All grade calculations go through one function, `gradeFor(mark)`. The counts, the
 distribution table, the chart, the borderline list and the CSV export can't
@@ -417,6 +418,36 @@ page is tiring. Many instructors already run their OS in dark mode, and the app 
 - The logo plate is light in dark mode.
 
 Screenshots of every state were taken in dark as well as light.
+
+## E9: Impact of changes in the review dialog
+
+**Problem.** Lowering A to 78 is a decision about three specific students, but the review only
+showed totals ("A: 11") and the changed cutoffs. The instructor couldn't see *who* the change
+affects without working it out by hand.
+
+**Solution.**
+- A new review section, "Students whose grade differs from the default cutoffs". Each row reads
+  "20247096 · 79 · A- to A" (ID, mark, default grade to new grade), highest mark first.
+- At most 10 rows, then a "Show all N" button. Expanding keeps focus on the list, and reopening
+  the review starts collapsed.
+- When nothing differs, one line says so.
+- Both grades come from `gradeFor()`, which now takes an optional cutoffs argument
+  (`gradeFor(mark, DEFAULT_CUTOFFS)`). There is still exactly one grading rule.
+- The review shows "Grading time: 4 min 12 s", and the app-bar clock is now labelled
+  "Grading time".
+  - A download freezes the clock, and the review reads the same frozen value via
+    `gradingElapsed()`.
+  - The completion message keeps its Stage 1 wording.
+- The CSV format is unchanged; the golden byte-for-byte tests still pass.
+
+**How tested.** `E9` tests:
+- A 78 in Introduction to Programming lists exactly the students scoring 78–79, with
+  `20247096 · 79 · A- to A` first. The expected list is computed independently from the fixture.
+- With the defaults, the "no student" line shows.
+- A at 71 changes 15 students: 10 are shown, then "Show all 15" expands to all of them with focus
+  on the list, and reopening collapses it again.
+- With a paused clock moved on 252s, the review reads "Grading time: 4 min 12 s", and the app bar
+  says "Grading time".
 
 ## Visual redesign
 

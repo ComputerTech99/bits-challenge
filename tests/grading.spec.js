@@ -1684,6 +1684,68 @@ test("E8: the logo sits on a light plate in the dark theme", async ({ page }) =>
   expect(bg).toBe("rgb(245, 244, 250)");
 });
 
+// ===== E9: impact of changes in the review dialog =====
+
+// Students of a course whose grade differs between two sets of cutoffs, as
+// "ID · mark · old to new", sorted by mark (highest first), then ID.
+function expectedImpact(courseName, cut) {
+  const G = ["A", "A-", "B", "B-", "C", "C-", "D"];
+  const grade = (m, c) => G.find(g => m >= c[g]) || "E";
+  return XLSX.utils.sheet_to_json(XLSX.readFile(fixture("demo_marks.xlsx")).Sheets.Marks)
+    .filter(r => r.Course === courseName)
+    .map(r => ({ id: String(r["BITS ID"]), m: Math.round(r["Total Marks"]) }))
+    .filter(r => grade(r.m, DEFAULT_CUT) !== grade(r.m, cut))
+    .sort((a, b) => b.m - a.m || a.id.localeCompare(b.id))
+    .map(r => `${r.id} · ${r.m} · ${grade(r.m, DEFAULT_CUT)} to ${grade(r.m, cut)}`);
+}
+
+test("E9: the review lists exactly the students whose grade differs from the defaults", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await typeCutoff(page, "A", 78);
+  await page.click("#reviewBtn");
+  const dialog = page.locator("#reviewDialog");
+  await expect(dialog.getByRole("heading", { name: "Students whose grade differs from the default cutoffs" })).toBeVisible();
+  const expected = expectedImpact(INTRO, { ...DEFAULT_CUT, A: 78 });
+  expect(expected[0]).toBe("20247096 · 79 · A- to A");
+  await expect(page.locator("#rvImpact li")).toHaveText(expected);
+  await expect(page.locator("#rvImpactAll")).toBeHidden();
+});
+
+test("E9: with default cutoffs the impact section says nobody changed", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await page.click("#reviewBtn");
+  await expect(page.locator("#rvImpact li")).toHaveCount(0);
+  await expect(page.locator("#rvImpactNone")).toHaveText("No student's grade differs from the default cutoffs.");
+});
+
+test("E9: more than 10 changes shows 10, then Show all N", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await typeCutoff(page, "A", 71); // the lowest A can go while A- starts at 70
+  const expected = expectedImpact(INTRO, { ...DEFAULT_CUT, A: 71 });
+  expect(expected.length).toBeGreaterThan(10);
+  await page.click("#reviewBtn");
+  await expect(page.locator("#rvImpact li")).toHaveText(expected.slice(0, 10));
+  const all = page.locator("#rvImpactAll");
+  await expect(all).toHaveText(`Show all ${expected.length}`);
+  await all.click();
+  await expect(page.locator("#rvImpact li")).toHaveText(expected);
+  await expect(all).toBeHidden();
+  await expect(page.locator("#rvImpact")).toBeFocused(); // focus isn't lost with the button
+  // Reopening starts collapsed again.
+  await page.click("#reviewBack");
+  await page.click("#reviewBtn");
+  await expect(page.locator("#rvImpact li")).toHaveCount(10);
+});
+
+test("E9: the review shows the grading time, and the app bar calls it Grading time", async ({ page }) => {
+  await pausedClock(page);
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await expect(page.locator("#appContext")).toContainText("Grading time 00:00");
+  await page.clock.fastForward(252_000); // 4 min 12 s
+  await page.click("#reviewBtn");
+  await expect(page.locator("#rvTime")).toHaveText("Grading time: 4 min 12 s");
+});
+
 test.describe("#32 touch at 390px", () => {
   test.use({ viewport: { width: 390, height: 700 }, hasTouch: true, isMobile: true });
 

@@ -430,6 +430,7 @@ dialog{
   color:var(--ink);
   background:var(--surface);
   box-shadow:var(--shadow);
+  overflow:auto; /* long impact lists scroll inside the dialog */
 }
 dialog::backdrop{background:var(--backdrop)}
 dialog[open]{animation:dialog-in .18s ease-out}
@@ -442,6 +443,10 @@ dialog h3{font-size:14px;color:var(--ink);margin:16px 0 4px}
 .review-meta dd{margin:0;font-weight:600}
 .review-list{margin:0;padding-left:20px}
 .review-info{margin:12px 0 0;color:var(--ink-muted)}
+.review-time{margin:12px 0 0;color:var(--ink-muted)}
+.review-none{margin:0;color:var(--ink-muted)}
+.impact-list:focus{outline:none}
+#rvImpactAll{margin-top:4px}
 .review-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-top:24px}
 @media (max-width:480px){
   .review-meta{grid-template-columns:1fr}
@@ -544,7 +549,7 @@ try{
     <span><b id="ctxInstructor"></b></span>
     <span><b id="ctxCourse"></b></span>
     <span><b id="ctxCount"></b> students</span>
-    <span>Time <b id="timerText">00:00</b></span>
+    <span>Grading time <b id="timerText">00:00</b></span>
   </div>
   <!-- E8: Light / Dark / System. System follows prefers-color-scheme. -->
   <fieldset class="theme-switch">
@@ -683,8 +688,13 @@ try{
     <thead><tr><th scope="col">Grade</th><th scope="col">Range</th><th scope="col" class="n">Students</th><th scope="col" class="n">Share</th></tr></thead>
     <tbody id="rvTable"></tbody>
   </table>
+  <p id="rvTime" class="review-time num"></p>
   <h3>Cutoffs changed from default</h3>
   <ul id="rvChanges" class="review-list"></ul>
+  <h3 id="rvImpactHeading">Students whose grade differs from the default cutoffs</h3>
+  <ul id="rvImpact" class="review-list impact-list num" tabindex="-1" aria-labelledby="rvImpactHeading"></ul>
+  <p id="rvImpactNone" class="review-none" hidden>No student's grade differs from the default cutoffs.</p>
+  <button type="button" class="link" id="rvImpactAll" hidden></button>
   <p id="rvBorderline" class="review-info"></p>
   <div class="review-actions">
     <button type="button" class="secondary" id="reviewBack">Back to grading</button>
@@ -712,11 +722,18 @@ try{
 /* ===== TIMER ===== */
 let gradingStartTime=null; // set on the first course selection
 let timerInterval=null;
+let timerStoppedAt=null;   // set when a download freezes the clock
+
+// Time spent on this course, up to the last download if the clock is frozen.
+// The app bar, the review (E9) and the completion message all use it.
+function gradingElapsed(){
+  return (timerStoppedAt ?? Date.now()) - gradingStartTime;
+}
 
 function renderTimer(){
   const text=document.getElementById("timerText");
 
-  const elapsed = Date.now() - gradingStartTime;
+  const elapsed = gradingElapsed();
   const min = Math.floor(elapsed/60000);
   const sec = Math.floor((elapsed%60000)/1000);
 
@@ -728,6 +745,7 @@ function renderTimer(){
 function startTimer(){
   if(gradingStartTime!==null) return; // already started: never run two intervals
   gradingStartTime=Date.now();
+  timerStoppedAt=null;
   renderTimer(); // show the start state now rather than after the first tick
   timerInterval=setInterval(renderTimer,1000);
 }
@@ -737,6 +755,7 @@ function resetTimer(){
   clearInterval(timerInterval);
   timerInterval=null;
   gradingStartTime=null;
+  timerStoppedAt=null;
   document.getElementById("timerText").innerText="00:00";
 }
 
@@ -754,9 +773,11 @@ let courseState=new Map(); // course name -> { cutoffs, undo, redo, downloaded }
 let previousCounts=null;          // last announced counts (null = nothing to compare)
 let finalizeCount = 0;
 
-// THE grading rule. Counts, chart, borderline list and export all use it.
-function gradeFor(mark){
-  for(const g of CUTOFF_GRADES) if(mark>=cutoffs[g]) return g;
+// THE grading rule. Counts, chart, borderline list, search, review and export
+// all use it. `cuts` defaults to the open course's cutoffs; the review (E9)
+// also asks it what a mark would get under the default cutoffs.
+function gradeFor(mark,cuts=cutoffs){
+  for(const g of CUTOFF_GRADES) if(mark>=cuts[g]) return g;
   return "E";
 }
 
@@ -1814,6 +1835,8 @@ reviewBtn.onclick=()=>{
   (changes.length ? changes : ["None. All cutoffs are at their defaults."]).forEach(t=>{
     const li=document.createElement("li"); li.textContent=t; rvChanges.appendChild(li);
   });
+  rvTime.textContent=`Grading time: ${formatDuration(gradingElapsed())}`;
+  renderImpact(rows);
   // Information, not a blocker: how many students still sit just below a cutoff.
   const N=Number(borderN.value);
   const near=borderlineGroups(rows,N).reduce((k,grp)=>k+grp.students.length,0);
@@ -1825,15 +1848,49 @@ reviewBtn.onclick=()=>{
 };
 reviewBack.onclick=()=>reviewDialog.close();
 
+// "4 min 12 s" for the review. (The completion message keeps its original "sec" wording.)
+function formatDuration(ms){
+  return `${Math.floor(ms/60000)} min ${Math.floor((ms%60000)/1000)} s`;
+}
+
+// E9: who is affected by the changes. Every student whose grade under the
+// current cutoffs differs from their grade under the defaults, highest mark
+// first. Both grades come from gradeFor(), like everything else.
+const IMPACT_SHOWN=10;
+let impactRows=[];
+function renderImpact(rows){
+  impactRows=rows
+    .map(d=>({id:String(d["BITS ID"]),mark:d["Total Marks"],from:gradeFor(d["Total Marks"],DEFAULT_CUTOFFS),to:gradeFor(d["Total Marks"])}))
+    .filter(r=>r.from!==r.to)
+    .sort((a,b)=>b.mark-a.mark || a.id.localeCompare(b.id));
+  showImpact(IMPACT_SHOWN);
+}
+function showImpact(limit){
+  rvImpact.innerHTML="";
+  impactRows.slice(0,limit).forEach(r=>{
+    const li=document.createElement("li");
+    li.textContent=`${r.id} · ${r.mark} · ${r.from} to ${r.to}`; // IDs from the file: text only
+    rvImpact.appendChild(li);
+  });
+  rvImpactNone.hidden=impactRows.length>0;
+  rvImpactAll.hidden=impactRows.length<=limit;
+  rvImpactAll.textContent=`Show all ${impactRows.length}`;
+}
+rvImpactAll.onclick=()=>{
+  showImpact(Infinity);
+  rvImpact.focus(); // the button hides itself; keep focus on the list it expanded
+};
+
 instructor.oninput=()=>{ exportError.innerText=""; courseError.innerText=""; };
 
 // Reached only through the review dialog, which has already checked the name.
 download.onclick=()=>{
   finalizeCount++;
   clearInterval(timerInterval);
+  timerStoppedAt=Date.now();
   renderTimer(); // freeze the clock on the same time the message reports
 
-  const elapsed = Date.now() - gradingStartTime;
+  const elapsed = gradingElapsed();
   const minT=Math.floor(elapsed/60000);
   const secT=Math.floor((elapsed%60000)/1000);
 
