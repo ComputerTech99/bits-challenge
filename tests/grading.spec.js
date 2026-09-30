@@ -1470,26 +1470,27 @@ test("#35 Reset to defaults uses no native confirm() anywhere", async ({ page })
 
 // ===== E6: per-course progress and autosave =====
 
+// Stage 2C: statuses read "Course (Status)" instead of "Course · Status".
 async function optionLabel(page, value) {
   return page.locator(`#course option[value="${value}"]`).textContent();
 }
 
 test("E6: each course shows Not started, In progress or Downloaded", async ({ page }) => {
   await startGrading(page, "demo_marks.xlsx", INTRO);
-  expect(await optionLabel(page, INTRO)).toBe(`${INTRO} · Not started`);
-  expect(await optionLabel(page, "Linear Algebra")).toBe("Linear Algebra · Not started");
+  expect(await optionLabel(page, INTRO)).toBe(`${INTRO} (Not started)`);
+  expect(await optionLabel(page, "Linear Algebra")).toBe("Linear Algebra (Not started)");
   await expect(page.locator("#sumProgress")).toHaveText("0 of 3 courses");
   await typeCutoff(page, "A", 78);
-  expect(await optionLabel(page, INTRO)).toBe(`${INTRO} · In progress`);
+  expect(await optionLabel(page, INTRO)).toBe(`${INTRO} (In progress)`);
   await download(page);
-  expect(await optionLabel(page, INTRO)).toBe(`${INTRO} · Downloaded`);
+  expect(await optionLabel(page, INTRO)).toBe(`${INTRO} (Downloaded)`);
   await expect(page.locator("#sumProgress")).toHaveText("1 of 3 courses");
   // A change after downloading means the file no longer matches: in progress again.
   await typeCutoff(page, "B", 62);
-  expect(await optionLabel(page, INTRO)).toBe(`${INTRO} · In progress`);
+  expect(await optionLabel(page, INTRO)).toBe(`${INTRO} (In progress)`);
   await expect(page.locator("#sumProgress")).toHaveText("0 of 3 courses");
   await page.click("#undoBtn"); // back to exactly what was downloaded
-  expect(await optionLabel(page, INTRO)).toBe(`${INTRO} · Downloaded`);
+  expect(await optionLabel(page, INTRO)).toBe(`${INTRO} (Downloaded)`);
 });
 
 test("E6: cutoffs and statuses survive a refresh when the same file is uploaded again", async ({ page }) => {
@@ -1505,8 +1506,8 @@ test("E6: cutoffs and statuses survive a refresh when the same file is uploaded 
   await expect(notice).toBeVisible();
   await expect(notice).toContainText("Restored your cutoffs from earlier.");
   await expect(cutoffInput(page, "A")).toHaveValue("78");
-  expect(await optionLabel(page, INTRO)).toBe(`${INTRO} · Downloaded`);
-  expect(await optionLabel(page, "Linear Algebra")).toBe("Linear Algebra · In progress");
+  expect(await optionLabel(page, INTRO)).toBe(`${INTRO} (Downloaded)`);
+  expect(await optionLabel(page, "Linear Algebra")).toBe("Linear Algebra (In progress)");
   await page.selectOption("#course", "Linear Algebra");
   await expect(cutoffInput(page, "B")).toHaveValue("62");
 });
@@ -1520,7 +1521,7 @@ test("E6: Start over forgets the saved cutoffs and returns every course to defau
   await page.locator("#restoreNotice").getByRole("button", { name: "Start over" }).click();
   await expect(cutoffInput(page, "A")).toHaveValue("80");
   await expect(page.locator("#restoreNotice")).toBeHidden();
-  expect(await optionLabel(page, INTRO)).toBe(`${INTRO} · Not started`);
+  expect(await optionLabel(page, INTRO)).toBe(`${INTRO} (Not started)`);
   await page.reload();
   await startGrading(page, "demo_marks.xlsx", INTRO);
   await expect(page.locator("#restoreNotice")).toBeHidden();
@@ -1571,7 +1572,7 @@ test("E6: everything still works when storage is blocked", async ({ page }) => {
   await page.goto("/");
   await startGrading(page, "demo_marks.xlsx", INTRO);
   await typeCutoff(page, "A", 78);
-  expect(await optionLabel(page, INTRO)).toBe(`${INTRO} · In progress`);
+  expect(await optionLabel(page, INTRO)).toBe(`${INTRO} (In progress)`);
   const { text } = await download(page);
   expect(text).toContain("Introduction to Programming");
   expect(errors).toEqual([]);
@@ -1588,12 +1589,12 @@ test("E7: an exact ID shows the student's mark and current grade and highlights 
   await startGrading(page, "demo_marks.xlsx", INTRO);
   await expect(page.getByLabel("Find a student")).toBeVisible();
   await findStudent(page, "20247096");
-  await expect(results(page).locator("li")).toHaveText(["20247096 · 79 · A-"]);
+  await expect(results(page).locator("li")).toHaveText(["20247096 79 marks A-"], { useInnerText: true });
   await expect(page.locator("#hist")).toHaveClass(/has-highlight/);
   await expect(page.locator('#hist rect.bar[data-mark="79"]')).toHaveClass(/highlight/);
   // The grade follows the cutoffs.
   await typeCutoff(page, "A", 79);
-  await expect(results(page).locator("li")).toHaveText(["20247096 · 79 · A"]);
+  await expect(results(page).locator("li")).toHaveText(["20247096 79 marks A"], { useInnerText: true });
   // Clearing the field clears the result and the highlight.
   await findStudent(page, "");
   await expect(results(page)).toBeEmpty();
@@ -1603,9 +1604,9 @@ test("E7: an exact ID shows the student's mark and current grade and highlights 
 test("E7: matching is trimmed, case-insensitive and partial from 4 characters", async ({ page }) => {
   await startGrading(page, "valid_basic.xlsx", "CS F211");
   await findStudent(page, "  2023a7ps0002p ");
-  await expect(results(page).locator("li")).toHaveText(["2023A7PS0002P · 19 · E"]);
+  await expect(results(page).locator("li")).toHaveText(["2023A7PS0002P 19 marks E"], { useInnerText: true });
   await findStudent(page, "ps0002");
-  await expect(results(page).locator("li")).toHaveText(["2023A7PS0002P · 19 · E"]);
+  await expect(results(page).locator("li")).toHaveText(["2023A7PS0002P 19 marks E"], { useInnerText: true });
   await findStudent(page, "002");
   await expect(results(page)).toHaveText("Type at least 4 characters of the BITS ID.");
 });
@@ -1717,6 +1718,19 @@ test("E8: the dark tokens are the same whether chosen or from the system", async
   expect(fromSystem["--canvas"]).toBe("#121120");
 });
 
+// Stage 2C: facts are never joined with "·" (setup summary, course options,
+// search results, review), including in native <select> options.
+test("Stage 2C: no meta strings joined with a middle dot anywhere in the grading flow", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await typeCutoff(page, "A", 78);
+  await page.fill("#findId", "20247");
+  const text = () => page.evaluate(() => document.body.innerText +
+    [...document.querySelectorAll("option")].map(o => o.textContent).join("\n"));
+  expect(await text()).not.toContain("·");
+  await page.click("#reviewBtn");
+  expect(await text()).not.toContain("·");
+});
+
 // Stage 2C: purple is reserved for the accent; every heading is ink, weight 600.
 for (const scheme of ["light", "dark"]) {
   test(`Stage 2C: panel and dialog headings are ink, weight 600 (${scheme})`, async ({ page }) => {
@@ -1794,7 +1808,8 @@ test("E8: in the dark theme the seal and the name as text replace the lockup, wi
 // ===== E9: impact of changes in the review dialog =====
 
 // Students of a course whose grade differs between two sets of cutoffs, as
-// "ID · mark · old to new", sorted by mark (highest first), then ID.
+// "ID|mark|old|new" (one row of the review's impact table), sorted by mark
+// (highest first), then ID. Stage 2C: was a "ID · mark · old to new" list.
 function expectedImpact(courseName, cut) {
   const G = ["A", "A-", "B", "B-", "C", "C-", "D"];
   const grade = (m, c) => G.find(g => m >= c[g]) || "E";
@@ -1803,8 +1818,11 @@ function expectedImpact(courseName, cut) {
     .map(r => ({ id: String(r["BITS ID"]), m: Math.round(r["Total Marks"]) }))
     .filter(r => grade(r.m, DEFAULT_CUT) !== grade(r.m, cut))
     .sort((a, b) => b.m - a.m || a.id.localeCompare(b.id))
-    .map(r => `${r.id} · ${r.m} · ${grade(r.m, DEFAULT_CUT)} to ${grade(r.m, cut)}`);
+    .map(r => `${r.id}|${r.m}|${grade(r.m, DEFAULT_CUT)}|${grade(r.m, cut)}`);
 }
+const impactRows = page => page.locator("#rvImpact tbody tr").evaluateAll(trs =>
+  trs.map(tr => [...tr.cells].map(c => c.textContent).join("|")));
+const impactRow = page => page.locator("#rvImpact tbody tr");
 
 test("E9: the review lists exactly the students whose grade differs from the defaults", async ({ page }) => {
   await startGrading(page, "demo_marks.xlsx", INTRO);
@@ -1813,15 +1831,26 @@ test("E9: the review lists exactly the students whose grade differs from the def
   const dialog = page.locator("#reviewDialog");
   await expect(dialog.getByRole("heading", { name: "Students whose grade differs from the default cutoffs" })).toBeVisible();
   const expected = expectedImpact(INTRO, { ...DEFAULT_CUT, A: 78 });
-  expect(expected[0]).toBe("20247096 · 79 · A- to A");
-  await expect(page.locator("#rvImpact li")).toHaveText(expected);
+  expect(expected[0]).toBe("20247096|79|A-|A");
+  await expect(page.locator("#rvImpact thead th")).toHaveText(["BITS ID", "Mark", "Default", "New"]);
+  expect(await impactRows(page)).toEqual(expected);
+  // The changed grade is the one accent in the table.
+  const [to, id, accent] = await page.evaluate(() => {
+    const cells = document.querySelector("#rvImpact tbody tr").cells;
+    const probe = document.createElement("span"); probe.style.color = "var(--accent)"; document.body.append(probe);
+    const a = getComputedStyle(probe).color; probe.remove();
+    return [getComputedStyle(cells[3]).color, getComputedStyle(cells[0]).color, a];
+  });
+  expect(to).toBe(accent);
+  expect(id).not.toBe(accent);
   await expect(page.locator("#rvImpactAll")).toBeHidden();
 });
 
 test("E9: with default cutoffs the impact section says nobody changed", async ({ page }) => {
   await startGrading(page, "demo_marks.xlsx", INTRO);
   await page.click("#reviewBtn");
-  await expect(page.locator("#rvImpact li")).toHaveCount(0);
+  await expect(impactRow(page)).toHaveCount(0);
+  await expect(page.locator("#rvImpact")).toBeHidden(); // no empty table header
   await expect(page.locator("#rvImpactNone")).toHaveText("No student's grade differs from the default cutoffs.");
 });
 
@@ -1831,17 +1860,18 @@ test("E9: more than 10 changes shows 10, then Show all N", async ({ page }) => {
   const expected = expectedImpact(INTRO, { ...DEFAULT_CUT, A: 71 });
   expect(expected.length).toBeGreaterThan(10);
   await page.click("#reviewBtn");
-  await expect(page.locator("#rvImpact li")).toHaveText(expected.slice(0, 10));
+  expect(await impactRows(page)).toEqual(expected.slice(0, 10));
   const all = page.locator("#rvImpactAll");
   await expect(all).toHaveText(`Show all ${expected.length}`);
   await all.click();
-  await expect(page.locator("#rvImpact li")).toHaveText(expected);
+  await expect(impactRow(page)).toHaveCount(expected.length);
+  expect(await impactRows(page)).toEqual(expected);
   await expect(all).toBeHidden();
   await expect(page.locator("#rvImpact")).toBeFocused(); // focus isn't lost with the button
   // Reopening starts collapsed again.
   await page.click("#reviewBack");
   await page.click("#reviewBtn");
-  await expect(page.locator("#rvImpact li")).toHaveCount(10);
+  await expect(impactRow(page)).toHaveCount(10);
 });
 
 test("E9: the review shows the grading time, and the app bar calls it Grading time", async ({ page }) => {
@@ -1889,13 +1919,13 @@ test("a11y: keyboard-only walkthrough of the Stage 2B flow", async ({ page }) =>
   // Search for a student.
   await tabTo(page, "#findId", { back: true });
   await page.keyboard.type("20247096");
-  await expect(page.locator("#findResults li")).toHaveText(["20247096 · 79 · A"]);
+  await expect(page.locator("#findResults li")).toHaveText(["20247096 79 marks A"], { useInnerText: true });
 
   // Review and download.
   await tabTo(page, "#reviewBtn", { max: 80 });
   await page.keyboard.press("Enter");
   await expect(page.locator("#reviewHeading")).toBeFocused();
-  await expect(page.locator("#rvImpact li")).toHaveCount(3);
+  await expect(page.locator("#rvImpact tbody tr")).toHaveCount(3);
   await tabTo(page, "#download");
   const [dl] = await Promise.all([page.waitForEvent("download"), page.keyboard.press("Enter")]);
   expect(dl.suggestedFilename()).toMatch(/^grades_Introduction_to_Programming_/);
@@ -1905,7 +1935,7 @@ test("a11y: keyboard-only walkthrough of the Stage 2B flow", async ({ page }) =>
   await tabTo(page, "#course", { back: true, max: 80 });
   await page.keyboard.press("L"); // Linear Algebra
   await expect(page.locator("#ctxCourse")).toHaveText("Linear Algebra");
-  await expect(page.locator(`#course option[value="${INTRO}"]`)).toHaveText(`${INTRO} · Downloaded`);
+  await expect(page.locator(`#course option[value="${INTRO}"]`)).toHaveText(`${INTRO} (Downloaded)`);
   await tabTo(page, "#themeBtn", { back: true });
   await page.keyboard.press("Enter");
   await page.keyboard.press("ArrowUp"); // System -> Dark

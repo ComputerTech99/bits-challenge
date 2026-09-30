@@ -220,9 +220,11 @@ button.text-btn:hover:not(:disabled){background:var(--canvas)}
 .search input{width:200px;padding-left:36px}
 .find-results{display:flex;flex-wrap:wrap;align-items:center;gap:4px 16px;min-width:0;margin-bottom:12px}
 .find-results:empty{display:none}
-.find-results ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:4px 16px}
-.find-results li{display:flex;align-items:center;gap:6px;white-space:nowrap}
-.find-results li b{font-weight:600}
+.find-results ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:4px 32px}
+/* ID, "79 marks" and the grade chip, separated by space rather than "·". */
+.find-results li{display:flex;align-items:center;gap:12px;white-space:nowrap}
+.find-results li .num{color:var(--ink-muted)}
+.find-results li b{font-weight:600;color:var(--ink)}
 .find-results p{margin:0;color:var(--ink-muted)}
 .inline-notice{
   display:flex;
@@ -509,6 +511,10 @@ dialog h3{font-size:14px;color:var(--ink);margin:16px 0 4px}
 .review-time{margin:12px 0 0;color:var(--ink-muted)}
 .review-none{margin:0;color:var(--ink-muted)}
 .impact-list:focus{outline:none}
+.impact-list[hidden]{display:none}
+/* The changed grade is what the review is about: the one accent in the table. */
+.impact-list .to{color:var(--accent);font-weight:600}
+.impact-list :is(th,td):nth-child(3){padding-left:24px} /* keeps Mark (right-aligned) off Default */
 #rvImpactAll{margin-top:4px}
 .review-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-top:24px}
 @media (max-width:480px){
@@ -783,7 +789,10 @@ try{
   <h3>Cutoffs changed from default</h3>
   <ul id="rvChanges" class="review-list"></ul>
   <h3 id="rvImpactHeading">Students whose grade differs from the default cutoffs</h3>
-  <ul id="rvImpact" class="review-list impact-list num" tabindex="-1" aria-labelledby="rvImpactHeading"></ul>
+  <table id="rvImpact" class="dist impact-list" tabindex="-1" aria-labelledby="rvImpactHeading">
+    <thead><tr><th scope="col">BITS ID</th><th scope="col" class="n">Mark</th><th scope="col">Default</th><th scope="col">New</th></tr></thead>
+    <tbody></tbody>
+  </table>
   <p id="rvImpactNone" class="review-none" hidden>No student's grade differs from the default cutoffs.</p>
   <button type="button" class="link" id="rvImpactAll" hidden></button>
   <p id="rvBorderline" class="review-info"></p>
@@ -924,7 +933,7 @@ function courseStatus(name){
 // the open course's class size and "N of M courses" downloaded.
 function updateProgress(){
   const options=[...course.options].slice(1); // skip the placeholder
-  options.forEach(o=>{ o.textContent=`${o.value} · ${courseStatus(o.value)}`; });
+  options.forEach(o=>{ o.textContent=`${o.value} (${courseStatus(o.value)})`; });
   const done=options.filter(o=>courseStatus(o.value)==="Downloaded").length, n=options.length;
   sumFile.textContent=loadedFileName;
   sumInstructor.textContent=instructor.value.trim();
@@ -1740,7 +1749,7 @@ function updateFind(){
       matches.slice(0,FIND_SHOWN).forEach(d=>{
         const g=gradeFor(d["Total Marks"]);
         const li=document.createElement("li");
-        li.innerHTML=`<span></span> · <b class="num">${d["Total Marks"]}</b> · <span class="chip">${g}</span>`;
+        li.innerHTML=`<span></span><span class="num"><b>${d["Total Marks"]}</b> marks</span><span class="chip">${g}</span>`;
         li.firstChild.textContent=d["BITS ID"]; // IDs come from the file: never as HTML
         ul.appendChild(li);
       });
@@ -1994,12 +2003,16 @@ function renderImpact(rows){
   showImpact(IMPACT_SHOWN);
 }
 function showImpact(limit){
-  rvImpact.innerHTML="";
+  const body=rvImpact.tBodies[0];
+  body.innerHTML="";
   impactRows.slice(0,limit).forEach(r=>{
-    const li=document.createElement("li");
-    li.textContent=`${r.id} · ${r.mark} · ${r.from} to ${r.to}`; // IDs from the file: text only
-    rvImpact.appendChild(li);
+    const tr=body.insertRow();
+    // IDs come from the file: set as text, never as HTML.
+    [r.id,r.mark,r.from,r.to].forEach((v,i)=>{ tr.insertCell().textContent=v; });
+    tr.cells[1].className="n num";
+    tr.cells[3].className="to";
   });
+  rvImpact.hidden=impactRows.length===0;
   rvImpactNone.hidden=impactRows.length>0;
   rvImpactAll.hidden=impactRows.length<=limit;
   rvImpactAll.textContent=`Show all ${impactRows.length}`;
