@@ -20,7 +20,7 @@ Evaluated on: debugging, functionality, product thinking, creativity, UX,
 technical execution, deployment.
 
 ## Current stage
-**STAGE 2C: RESTRAINT PASS**, then the final fixes (#36–#39), then deploy.
+**FINAL FIXES**, then deploy.
 No new features. The job now is to remove visual noise and make the product
 feel finished. If a change adds ink rather than removing it, ask me first.
 
@@ -75,16 +75,22 @@ feel finished. If a change adds ink rather than removing it, ask me first.
 Subject: a tool an instructor uses to make consequential decisions about
 students' grades. The feel is calm, precise and institutional, like a
 well-made mark sheet, not a marketing dashboard or an infographic. The chart
-is the centrepiece through its size and position, never through colour.
+is the centrepiece: its colour is the one place the product is allowed to be
+beautiful, and everywhere else stays quiet.
 
 **Core principle: colour is information, not decoration.** The screen is
-neutral by default. The accent colour marks only (a) what is interactive,
-such as the primary action, focus rings and cutoff lines/handles, and (b) what
-the user is focused on right now: a hovered, searched or borderline
-student's bar, or a changed grade in the review. If something is coloured
-and it is neither interactive nor in focus, it should be neutral. There
-are no per-grade colours anywhere; the grade letter carries the meaning.
-Red (`--danger`) is for errors only.
+neutral by default. Colour appears in exactly two roles:
+1. **Grade encoding:** the "Aurora" palette, a perceptually ordered ramp from
+   violet (A) through blue and teal to green (E), built in OKLCH. Grades are
+   ordinal, so their colours are ordered too: one continuous sweep, never
+   unrelated hues. It is used ONLY on the histogram bars and on the chart's
+   legend, meaning the share bars and a small dot on grade chips. Nowhere else.
+2. **Interaction:** the accent marks the primary action, focus rings, and a
+   cutoff handle while it is hovered or dragged.
+Focus on a student (hover, search, borderline) is shown by dimming every other
+bar to 25% opacity and outlining the focused one, never by recolouring.
+No reds, oranges or ambers in the grade palette: low grades must not read as
+errors. Red (`--danger`) is for errors only.
 
 **Colour tokens, light** (CSS custom properties on `:root`)
 - `--ink #1c1a33` (text and all headings) · `--ink-muted #5f5b78` (labels,
@@ -93,8 +99,13 @@ Red (`--danger`) is for errors only.
 - `--canvas #f5f4fa` (page) · `--surface #ffffff` (panels)
 - `--accent #5b3cc4` (BITS purple) · `--accent-soft #eeeafb` (quiet tint,
   e.g. a highlighted row or the drop zone on hover) · `--on-accent #ffffff`
-- `--bar #8f8ca0` (every histogram bar and share bar; 3.3:1 on the surface,
-  which meets WCAG 1.4.11) · `--bar-focus` = `--accent` (highlighted bars only)
+- Grade palette "Aurora" (light): `--g-A #4e2999` · `--g-Am #3343a6` ·
+  `--g-B #005aa3` · `--g-Bm #006d97` · `--g-C #007b8b` · `--g-Cm #00887e` ·
+  `--g-D #0b936c` · `--g-E #4e9a52`. Every colour is ≥ 3:1 on the surface and
+  on band-alt (the lowest is 3.25:1).
+- `--bar #8f8ca0` remains only as a fallback before grades are assigned.
+- `--cutoff-line` = `--ink-muted` at 60% (lines are neutral now that the bars
+  carry colour; the accent appears only on the active handle).
 - `--band-alt #f8f7fc` (a barely visible shade on alternate grade bands so
   they remain distinguishable; no other band tints)
 - `--danger #b42318` · `--danger-soft #fef3f2` · `--danger-rule #f1c4bf`
@@ -108,11 +119,13 @@ name a colour of its own; a test fails on any hex/rgb outside the token blocks.
 Canvas `#121120` · surface `#1b1a2e` · rule `#2e2c45` · rule-strong `#45425f` ·
 ink `#ecebf5` · ink-muted `#a6a3bf` · accent `#9b87f0` · accent-soft `#2a2650` ·
 on-accent `#121120` (white fails AA on the light accent) · bar `#6e6b88` ·
-bar-focus `#c4b5ff` (lighter than the accent so focused bars clearly stand out) ·
+grade palette (dark; A is the brightest, so it stays the most prominent):
+A `#c0aeff` · A- `#98b1ff` · B `#72b4f8` · B- `#52b5df` · C `#45b2c2` ·
+C- `#3faea4` · D `#43a883` · E `#5a9f5d` (all ≥ 5:1 on the dark surface and band-alt) ·
 band-alt `#201f35` · danger `#f97066` · danger-soft `#3a1d22` · danger-rule `#6b2c2c`.
 Tests enforce: bars ≥ 3:1 against the surface and the band-alt shade in both
-themes, focused bars clearly distinct from neutral ones (hue plus ≥ 2:1
-lightness contrast), and all text ≥ AA.
+themes, the grade palette's order (OKLCH hue decreasing from A to E), and all
+text ≥ AA. Grade colours never carry text, so there's no text-on-grade contrast to manage.
 
 **Components**
 - **App bar:** logo, "Grading console", course name, grading time, and a single
@@ -124,9 +137,13 @@ lightness contrast), and all text ≥ AA.
   No plates or boxes behind the logo.
 - **Chart:** one row of labels only, the cutoff handles ("A 80", 12px, 500
   weight, neutral border; accent on hover or drag; value only if labels
-  collide). No band-letter row. Bars in `--bar`; only focused bars in `--bar-focus`.
+  collide). No band-letter row. Bars in their grade colour; cutoff lines in
+  `--cutoff-line`; the active handle in the accent. Bars recolour live as
+  cutoffs move (a 150ms fill transition, disabled under reduced motion).
 - **Grade chips:** neutral: `--surface` background, 1px `--rule` border, `--ink`
-  text. Share is shown as a slim `--bar` horizontal bar, not colour.
+  text, plus an 8px dot in the grade colour before the letter. Share bars in
+  the distribution table use the grade colour, so the table doubles as the
+  chart's legend.
 - **Panel headers:** heading in `--ink`, weight 600. Secondary actions are
   quiet: icon buttons for undo/redo (with tooltip and `aria-label`), a text
   button for reset, and a compact search field with an icon.
