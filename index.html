@@ -70,6 +70,16 @@
 
 /* ===== BASE ===== */
 *,*::before,*::after{box-sizing:border-box}
+/* Grade encoding: any element with a data-grade gets that grade's colour as
+   --grade. Only the bars, the share bars and the chip dots use it. */
+[data-grade="A"]{--grade:var(--g-A)}
+[data-grade="A-"]{--grade:var(--g-Am)}
+[data-grade="B"]{--grade:var(--g-B)}
+[data-grade="B-"]{--grade:var(--g-Bm)}
+[data-grade="C"]{--grade:var(--g-C)}
+[data-grade="C-"]{--grade:var(--g-Cm)}
+[data-grade="D"]{--grade:var(--g-D)}
+[data-grade="E"]{--grade:var(--g-E)}
 body{
   margin:0;
   min-height:100vh;
@@ -363,16 +373,9 @@ button:disabled{opacity:.45;cursor:not-allowed}
 /* Bands: no tints, just a barely visible shade on every other band. */
 #hist .band{fill:none}
 #hist .band.alt{fill:var(--band-alt)}
-/* Each bar in its grade's colour; it recolours live as a cutoff moves. */
-#hist .bar{fill:var(--bar);transition:fill .15s}
-#hist .bar[data-grade="A"]{fill:var(--g-A)}
-#hist .bar[data-grade="A-"]{fill:var(--g-Am)}
-#hist .bar[data-grade="B"]{fill:var(--g-B)}
-#hist .bar[data-grade="B-"]{fill:var(--g-Bm)}
-#hist .bar[data-grade="C"]{fill:var(--g-C)}
-#hist .bar[data-grade="C-"]{fill:var(--g-Cm)}
-#hist .bar[data-grade="D"]{fill:var(--g-D)}
-#hist .bar[data-grade="E"]{fill:var(--g-E)}
+/* Each bar in its grade's colour (--grade, set by its data-grade); it
+   recolours live as a cutoff moves. */
+#hist .bar{fill:var(--grade,var(--bar));transition:fill .15s}
 /* Focus (a bar hovered or keyboard-read, a search match, a hovered borderline
    student) keeps the bar's grade colour: every other bar dims to 25% and the
    focused one gets an ink outline. */
@@ -426,11 +429,13 @@ button:disabled{opacity:.45;cursor:not-allowed}
 }
 .stat b{font-size:16px;font-weight:600;color:var(--ink)}
 
-/* ===== GRADE CHIPS: neutral; the letter carries the meaning ===== */
+/* ===== GRADE CHIPS: neutral, with a dot in the grade's colour (the chart's
+   legend); the letter carries the meaning ===== */
 .chip{
   display:inline-flex;
   align-items:center;
   justify-content:center;
+  gap:4px;
   min-width:32px;
   height:24px;
   padding:0 8px;
@@ -440,6 +445,13 @@ button:disabled{opacity:.45;cursor:not-allowed}
   color:var(--ink);
   font-size:12px;
   font-weight:600;
+}
+.chip::before{
+  content:"";
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  background:var(--grade);
 }
 
 /* ===== CUTOFF EDITOR ===== */
@@ -487,11 +499,12 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .dist tbody tr:last-child th,.dist tbody tr:last-child td{border-bottom:none}
 .dist .n{text-align:right}
 .dist td.n b{font-weight:600}
-/* Share: a slim neutral bar (scaled to the largest grade) before the number. */
+/* Share: a slim bar in the grade's colour (scaled to the largest grade)
+   before the number; with the chip dots, the table is the chart's legend. */
 .dist .share{width:40%}
 .share-cell{display:flex;align-items:center;justify-content:flex-end;gap:8px}
 .share-track{flex:1;display:flex;min-width:0}
-.share-bar{height:4px;border-radius:2px;background:var(--bar)}
+.share-bar{height:4px;border-radius:2px;background:var(--grade,var(--bar))}
 /* ===== BORDERLINE STUDENTS ===== */
 .bl-controls{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:12px;color:var(--ink-muted)}
 .bl-controls label{font-weight:400;color:var(--ink-muted)}
@@ -1183,7 +1196,7 @@ function buildCutoffEditor(){
     const row=document.createElement("div");
     row.className="cutoff-row";
     row.innerHTML=`
-      <label for="${id}"><span class="chip">${g}</span> from</label>
+      <label for="${id}"><span class="chip" data-grade="${g}">${g}</span> from</label>
       <div class="stepper">
         <!-- −/+ are for pointers; keyboard users step with ↑/↓ in the input, so
              the buttons stay out of the tab order (7 stops instead of 21). -->
@@ -1225,7 +1238,7 @@ function buildCutoffEditor(){
   });
   const e=document.createElement("div");
   e.className="cutoff-row";
-  e.innerHTML=`<span class="fixed-label"><span class="chip">E</span> from</span>
+  e.innerHTML=`<span class="fixed-label"><span class="chip" data-grade="E">E</span> from</span>
     <span class="fixed-value">0 (fixed)</span><span class="range num" id="range-E"></span>`;
   grades.appendChild(e);
 }
@@ -1280,7 +1293,7 @@ function renderDistribution(counts,total,tbody=gradeSummary){
     const bar=most ? (100*counts[g]/most).toFixed(1) : 0; // the % text carries the value
     const tr=document.createElement("tr");
     tr.dataset.grade=g;
-    tr.innerHTML=`<th scope="row"><span class="chip">${g}</span></th>
+    tr.innerHTML=`<th scope="row"><span class="chip" data-grade="${g}">${g}</span></th>
       <td class="num">${from}–${to}</td><td class="n num"><b>${counts[g]}</b></td>
       <td class="n num share"><span class="share-cell"><span class="share-track" aria-hidden="true"><span class="share-bar" style="width:${bar}%"></span></span>${share}</span></td>`;
     tbody.appendChild(tr);
@@ -1781,7 +1794,7 @@ function updateFind(){
       matches.slice(0,FIND_SHOWN).forEach(d=>{
         const g=gradeFor(d["Total Marks"]);
         const li=document.createElement("li");
-        li.innerHTML=`<span></span><span class="num"><b>${d["Total Marks"]}</b> marks</span><span class="chip">${g}</span>`;
+        li.innerHTML=`<span></span><span class="num"><b>${d["Total Marks"]}</b> marks</span><span class="chip" data-grade="${g}">${g}</span>`;
         li.firstChild.textContent=d["BITS ID"]; // IDs come from the file: never as HTML
         ul.appendChild(li);
       });

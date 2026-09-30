@@ -1174,6 +1174,25 @@ for (const scheme of ["light", "dark"]) {
   });
 }
 
+test("Stage 2D: chips carry a dot and share bars a fill in their grade's colour, matching the bars", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  const colours = await gradeColours(page);
+  const rows = await page.locator("#gradeSummary tr").evaluateAll(trs => trs.map(tr => {
+    const dot = getComputedStyle(tr.querySelector(".chip"), "::before");
+    return { g: tr.dataset.grade, dot: dot.backgroundColor, size: [dot.width, dot.height], share: getComputedStyle(tr.querySelector(".share-bar")).backgroundColor };
+  }));
+  expect(rows).toHaveLength(8);
+  for (const r of rows) expect.soft(r, r.g).toMatchObject({ dot: colours[r.g], size: ["8px", "8px"], share: colours[r.g] });
+  const barFill = await page.locator('#hist rect.bar[data-grade="B"]').first().evaluate(b => getComputedStyle(b).fill);
+  expect(barFill).toBe(colours.B);
+  // Every chip in the app has a coloured dot: cutoff editor, fixed E row and search results.
+  await page.fill("#findId", "20247096");
+  const dots = await page.locator(".chip").evaluateAll(cs => cs.filter(c => c.offsetParent).map(c => ({
+    g: c.dataset.grade, text: c.textContent, dot: getComputedStyle(c, "::before").backgroundColor })));
+  expect(dots.length).toBeGreaterThan(16);
+  for (const d of dots) expect.soft(d, d.text).toMatchObject({ g: d.text, dot: colours[d.text] });
+});
+
 for (const scheme of ["light", "dark"]) {
   test(`Stage 2D: the grade palette is ordered (OKLCH hue falls from A to E) in the ${scheme} theme`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: scheme });
