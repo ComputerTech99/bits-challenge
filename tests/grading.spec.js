@@ -1746,6 +1746,75 @@ test("E9: the review shows the grading time, and the app bar calls it Grading ti
   await expect(page.locator("#rvTime")).toHaveText("Grading time: 4 min 12 s");
 });
 
+// ===== Stage 2B: checks before finishing =====
+
+// Press Tab (or Shift+Tab) until `selector` has focus; fails if it takes more than `max` presses.
+async function tabTo(page, selector, { back = false, max = 40 } = {}) {
+  const target = page.locator(selector);
+  for (let i = 0; i < max; i++) {
+    if (await target.evaluate(el => el === document.activeElement)) return;
+    await page.keyboard.press(back ? "Shift+Tab" : "Tab");
+  }
+  await expect(target).toBeFocused();
+}
+
+test("a11y: keyboard-only walkthrough of the Stage 2B flow", async ({ page }) => {
+  // Upload (the OS picker itself can't be driven), then choose a course.
+  await tabTo(page, "#instructor");
+  await page.keyboard.type("Dr Rao");
+  await tabTo(page, "#file");
+  await page.locator("#file").setInputFiles(fixture("demo_marks.xlsx"));
+  await expect(page.locator("#course option")).toHaveCount(4);
+  await tabTo(page, "#course");
+  await page.keyboard.press("I"); // type-ahead: Introduction to Programming
+  await expect(page.locator("body")).toHaveClass(/grading/);
+
+  // Change a cutoff with the arrow keys, then undo and redo it from the keyboard.
+  await tabTo(page, "#cut-A");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+  await expect(cutoffInput(page, "A")).toHaveValue("78");
+  await page.keyboard.press("ControlOrMeta+z");     // both presses were one step
+  await expect(cutoffInput(page, "A")).toHaveValue("80");
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect(cutoffInput(page, "A")).toHaveValue("78");
+
+  // Search for a student.
+  await tabTo(page, "#findId", { back: true });
+  await page.keyboard.type("20247096");
+  await expect(page.locator("#findResults li")).toHaveText(["20247096 · 79 · A"]);
+
+  // Review and download.
+  await tabTo(page, "#reviewBtn", { max: 80 });
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#reviewHeading")).toBeFocused();
+  await expect(page.locator("#rvImpact li")).toHaveCount(3);
+  await tabTo(page, "#download");
+  const [dl] = await Promise.all([page.waitForEvent("download"), page.keyboard.press("Enter")]);
+  expect(dl.suggestedFilename()).toMatch(/^grades_Introduction_to_Programming_/);
+  await expect(page.locator("#reviewBtn")).toBeFocused();
+
+  // Switch course, then change the theme.
+  await tabTo(page, "#course", { back: true, max: 80 });
+  await page.keyboard.press("L"); // Linear Algebra
+  await expect(page.locator("#ctxCourse")).toHaveText("Linear Algebra");
+  await expect(page.locator(`#course option[value="${INTRO}"]`)).toHaveText(`${INTRO} · Downloaded`);
+  await tabTo(page, '.theme-switch input[value="system"]', { back: true });
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+});
+
+test("ground truth still holds after Stage 2B: Introduction to Programming at default cutoffs", async ({ page }) => {
+  // The Stage 1 ground-truth numbers, re-checked through every Stage 2B surface.
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  const counts = await gradeCounts(page);
+  await page.click("#reviewBtn");
+  const dialog = await page.locator("#rvTable tr").evaluateAll(rows =>
+    Object.fromEntries(rows.map(r => [r.dataset.grade, Number(r.querySelector("td b").textContent)])));
+  expect(dialog).toEqual(counts);
+  await expect(page.locator("#rvImpactNone")).toBeVisible();
+});
+
 test.describe("#32 touch at 390px", () => {
   test.use({ viewport: { width: 390, height: 700 }, hasTouch: true, isMobile: true });
 
