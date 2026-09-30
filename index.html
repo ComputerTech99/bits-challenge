@@ -422,22 +422,23 @@ button:disabled{opacity:.45;cursor:not-allowed}
   pointer-events:none;
   font-variant-numeric:tabular-nums;
 }
+/* One row of label/value pairs split by thin rules: no cards (#48). */
 .stats{
   display:grid;
   grid-template-columns:repeat(5,1fr);
-  gap:8px;
-  margin-top:16px;
+  row-gap:16px;
+  margin-top:24px;
 }
 .stat{
   display:flex;
   flex-direction:column;
   gap:4px;
-  padding:8px 12px;
-  border:1px solid var(--rule);
-  border-radius:var(--radius-control);
+  padding:0 16px;
+  border-left:1px solid var(--rule);
   font-size:12px;
   color:var(--ink-muted);
 }
+.stat:first-child{border-left:none;padding-left:0}
 .stat b{font-size:16px;font-weight:600;color:var(--ink)}
 
 /* ===== GRADE CHIPS: neutral, with a dot in the grade's colour (the chart's
@@ -654,7 +655,9 @@ html{scroll-padding-bottom:var(--actionbar-h,0px)}
   .brand{flex:1}
   .theme{order:1}
   .appbar-context{order:2;flex-basis:100%;margin-left:0}
+  /* Two rows (3 + 2); a row never starts with a rule. */
   .stats{grid-template-columns:repeat(3,1fr)}
+  .stat:nth-child(3n+1){border-left:none;padding-left:0}
   /* The course label goes above a full-width select, so the status fits (#43). */
   .setup.collapsed .controls{width:100%}
   .setup.collapsed .controls .field{flex-direction:column;align-items:stretch;gap:4px}

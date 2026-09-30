@@ -2435,3 +2435,21 @@ test("#47 the − and + steppers are borderless icon buttons; the number keeps i
   const box = await step.boundingBox();
   expect(box.height).toBe(40);
 });
+
+for (const width of [1440, 390]) {
+  test(`#48 stats are label/value pairs split by rules, not cards (${width}px)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await startGrading(page, "demo_marks.xlsx", INTRO);
+    const stats = await page.locator(".stats .stat").evaluateAll(els => els.map(el => {
+      const cs = getComputedStyle(el), r = el.getBoundingClientRect();
+      return { top: Math.round(r.top), left: cs.borderLeftWidth, others: [cs.borderTopWidth, cs.borderRightWidth, cs.borderBottomWidth], radius: cs.borderTopLeftRadius };
+    }));
+    expect(stats).toHaveLength(5);
+    for (const s of stats) expect(s).toMatchObject({ others: ["0px", "0px", "0px"], radius: "0px" });
+    const rows = [...new Set(stats.map(s => s.top))];
+    expect(rows).toHaveLength(width === 1440 ? 1 : 2);
+    // A divider between neighbours in a row, never before the first of a row.
+    stats.forEach((s, i) => expect(s.left, `stat ${i}`).toBe(i === 0 || s.top !== stats[i - 1].top ? "0px" : "1px"));
+    await expect(stat(page, "Median")).toHaveText("64");
+  });
+}

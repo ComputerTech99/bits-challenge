@@ -631,6 +631,7 @@ Pure styling, one `style:` commit each. Each removes ink that didn't help the in
 | # | Change | How tested |
 |---|---|---|
 | 47 | **Cutoff steppers.** The − and + buttons lose their border and background and become icon buttons with a `--canvas` hover background. The number input keeps its border, so the one box in each row is the value itself. | `#47`: the stepper has a 0px border and a transparent background, `--canvas` on hover, and is still 40px tall; the input keeps its 1px border. Screenshots at 1440 and 390, light and dark. |
+| 48 | **Stats.** The five bordered cards become one row of label/value pairs (label 12px `--ink-muted` above a 16px 600 value) separated by 1px `--rule` dividers, with no card borders or radius. Below 600px they wrap to two rows (3 + 2), and a row never starts with a divider. The markup (`.stat` with a `<b>` value) is unchanged, so every stats test reads it the same way. | `#48` ×2: no top, right or bottom border and no radius; one row at 1440 and two at 390; a 1px divider between neighbours and none before the first of a row. Screenshots at 1440 and 390, light and dark. |
 
 ### Tests rewritten in the final fixes
 
