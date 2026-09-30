@@ -629,3 +629,4 @@ No new features. These are the fixes and the quieting pass before deployment; th
 | Test | Why it changed | What it checks now |
 |---|---|---|
 | E6: each course shows Not started, In progress or Downloaded | #37: a change after a download is no longer "In progress". | After downloading and changing B, the option reads "(Changed since download)" and the summary drops to 0 of 3; undo still restores "Downloaded". |
+| Stage 2D: focus dims the other bars (light and dark × hover a bar, search, borderline) | #45: the 1.5px ink outline is replaced by a caret, because on a ~3px bar at 390px the outline hid the bar's colour. | The focused bar keeps its grade fill at full opacity with **no** stroke; every other bar is at 0.25 opacity with no stroke; exactly one `.focus-caret` in `--ink`, 5–7px wide, centred on the bar (±1px) and ending 0–4px above its top; moving away removes the caret. A new `#45` case runs the same check at 390px in dark. |

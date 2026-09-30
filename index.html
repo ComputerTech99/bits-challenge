@@ -379,10 +379,11 @@ button:disabled{opacity:.45;cursor:not-allowed}
    recolours live as a cutoff moves. */
 #hist .bar{fill:var(--grade,var(--bar));transition:fill .15s}
 /* Focus (a bar hovered or keyboard-read, a search match, a hovered borderline
-   student) keeps the bar's grade colour: every other bar dims to 25% and the
-   focused one gets an ink outline. */
+   student) keeps the bar's grade colour: every other bar dims to 25% and a
+   small ink caret points at the focused one. (An outline hid a 3px-wide bar's
+   colour on a phone, #45.) */
 #hist.has-highlight .bar:not(.highlight){opacity:.25}
-#hist .bar.highlight{stroke:var(--ink);stroke-width:1.5}
+#hist .focus-caret{fill:var(--ink);pointer-events:none}
 /* Cutoff lines are neutral (the bars carry the colour). */
 #hist .cutoff-line{stroke:var(--cutoff-line);stroke-width:1.5}
 /* The one label row: calm "A 80" pills with a neutral border. */
@@ -1607,6 +1608,9 @@ function buildChart(animate){
     svgEl("path",{d,class:"curve"},hist);
   }
 
+  // Carets over focused bars, drawn by applyHighlight().
+  chart.carets=svgEl("g",{class:"carets","aria-hidden":"true"},hist);
+
   // Invisible full-height column per mark for hover tooltips.
   const hitLayer=svgEl("g",{class:"hits"},hist);
   for(let mark=0;mark<=100;mark++){
@@ -1834,6 +1838,13 @@ function applyHighlight(){
     : hoverMark!==null ? [hoverMark] : searchMarks);
   hist.classList.toggle("has-highlight",lit.size>0);
   chart.bars.forEach((bar,i)=>{ if(bar) bar.classList.toggle("highlight",lit.has(i)); });
+  // A 6px-wide ink caret just above each focused bar.
+  chart.carets.replaceChildren();
+  lit.forEach(mark=>{
+    if(!chart.bars[mark]) return;
+    const cx=chart.x(mark)+chart.step/2, tip=chart.y(chart.counts[mark])-2;
+    svgEl("path",{class:"focus-caret",d:`M${cx-3} ${tip-5}H${cx+3}L${cx} ${tip}Z`},chart.carets);
+  });
 }
 
 // ===== FIND A STUDENT (E7) =====

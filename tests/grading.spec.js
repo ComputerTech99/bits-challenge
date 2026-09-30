@@ -1145,23 +1145,38 @@ test("Stage 2D: cutoff lines are neutral; a handle takes the accent only while h
   await expect(line).not.toHaveCSS("stroke", accent);
 });
 
-// Stage 2D: focus never recolours. The focused bar keeps its grade colour and
-// gets a 1.5px ink outline; every other bar dims to 25%. Replaces the Stage 2C
-// check that a focused bar turned violet (--bar-focus).
+// Stage 2D: focus never recolours. The focused bar keeps its grade colour;
+// every other bar dims to 25%. Replaces the Stage 2C check that a focused bar
+// turned violet (--bar-focus). #45 (rewritten from asserting a 1.5px ink
+// outline): no bar has a stroke, and a small ink caret sits just above the
+// focused bar, centred on it.
 async function expectFocusedBar(page, mark) {
   await expect(page.locator("#hist")).toHaveClass(/has-highlight/);
   const colours = await gradeColours(page);
   const ink = await page.evaluate(() => getComputedStyle(document.body).color);
   const bars = await page.locator("#hist rect.bar").evaluateAll(bs => bs.map(b => {
     const cs = getComputedStyle(b);
-    return { mark: Number(b.dataset.mark), g: b.dataset.grade, fill: cs.fill, opacity: cs.opacity, stroke: cs.stroke, width: cs.strokeWidth };
+    return { mark: Number(b.dataset.mark), g: b.dataset.grade, fill: cs.fill, opacity: cs.opacity, stroke: cs.stroke,
+      cx: b.x.baseVal.value + b.width.baseVal.value / 2, top: b.y.baseVal.value };
   }));
   const lit = bars.find(b => b.mark === mark);
-  expect(lit).toMatchObject({ fill: colours[lit.g], opacity: "1", stroke: ink, width: "1.5px" });
+  expect(lit).toMatchObject({ fill: colours[lit.g], opacity: "1", stroke: "none" });
   for (const b of bars.filter(b => b.mark !== mark)) {
     expect.soft(b.opacity, `bar ${b.mark}`).toBe("0.25");
     expect.soft(b.stroke, `bar ${b.mark}`).toBe("none");
   }
+  const carets = await page.locator("#hist .focus-caret").evaluateAll(cs => cs.map(c => {
+    const b = c.getBBox();
+    return { cx: b.x + b.width / 2, bottom: b.y + b.height, w: b.width, fill: getComputedStyle(c).fill };
+  }));
+  expect(carets).toHaveLength(1);
+  const [c] = carets;
+  expect(c.fill).toBe(ink);
+  expect(Math.abs(c.cx - lit.cx)).toBeLessThanOrEqual(1);
+  expect(c.w).toBeGreaterThanOrEqual(5);
+  expect(c.w).toBeLessThanOrEqual(7);
+  expect(c.bottom).toBeLessThanOrEqual(lit.top);
+  expect(lit.top - c.bottom).toBeLessThanOrEqual(4);
 }
 
 for (const scheme of ["light", "dark"]) {
@@ -1177,6 +1192,7 @@ for (const scheme of ["light", "dark"]) {
       await page.mouse.move(0, 0);
       await expect(page.locator("#hist")).not.toHaveClass(/has-highlight/);
       await expect(page.locator('#hist rect.bar[data-mark="65"]')).toHaveCSS("stroke", "none");
+      await expect(page.locator("#hist .focus-caret")).toHaveCount(0);
     });
     test("a search match", async ({ page }) => {
       await page.fill("#findId", "20247096");
@@ -2353,5 +2369,17 @@ test.describe("#44 colliding labels at 390px", () => {
     expect(await shown("A")).toBe(true);
     expect(await shown("A-")).toBe(false);
     expect(await pillsOverlap(page)).toBe(false);
+  });
+});
+
+test.describe("#45 focus on a narrow bar at 390px", () => {
+  test.use({ viewport: { width: 390, height: 900 }, colorScheme: "dark" });
+
+  test("#45 a ~3px bar keeps its grade colour, marked by a caret, in dark", async ({ page }) => {
+    await startGrading(page, "demo_marks.xlsx", INTRO);
+    await page.fill("#findId", "20247096");
+    await expectFocusedBar(page, 79);
+    await page.fill("#findId", "");
+    await expect(page.locator("#hist .focus-caret")).toHaveCount(0);
   });
 });

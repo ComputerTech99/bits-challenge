@@ -88,7 +88,8 @@ neutral by default. Colour appears in exactly two roles:
 2. **Interaction:** the accent marks the primary action, focus rings, and a
    cutoff handle while it is hovered or dragged.
 Focus on a student (hover, search, borderline) is shown by dimming every other
-bar to 25% opacity and outlining the focused one, never by recolouring.
+bar to 25% opacity and placing a small `--ink` caret (about 6px) just above
+the focused one, never by recolouring or outlining it (#45).
 No reds, oranges or ambers in the grade palette: low grades must not read as
 errors. Red (`--danger`) is for errors only.
 
