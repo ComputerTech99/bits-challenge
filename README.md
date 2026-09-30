@@ -1,93 +1,121 @@
-# BITS Digital CodeForge: Grading Console
+# Grading console
 
-A single-file web app (`index.html`) that helps an instructor decide fair grade
-cutoffs for a course and submit the grades. It was built for the BITS Digital
-CodeForge challenge and is a prototype, not an official BITS tool.
+A grading console for instructors: upload a class's marks, set fair grade
+cutoffs on the distribution, and download final grades. It was rebuilt from a
+deliberately buggy prototype for the BITS Digital CodeForge V1.0 challenge. It
+is not an official BITS tool.
 
-**Live URL:** _coming soon (GitHub Pages)_
+**Live app:** https://computertech99.github.io/bits-challenge/
 
-**Try it:** [download the sample marks file](fixtures/demo_marks.xlsx) (3
-courses, 148 students), open the app, enter a name, and drop the file onto the
-upload area.
+You don't need your own data. The upload area has a link to download a sample
+marks file (3 courses, 148 students).
 
-## What it does
-- **Upload** an Excel file (`.xlsx` or `.xls`) with the columns BITS ID, Course
-  and Total Marks. Bad rows are rejected with row-level messages (missing or
-  out-of-range marks, duplicate IDs in a course, and so on).
-- **See the distribution:** one bar per mark, coloured by the grade it currently
-  gets, with grade bands, a bell curve, and Min / Max / Avg / Median / Std dev.
-- **Set cutoffs** by dragging the lines on the chart or using the seven "from"
-  controls. Ranges are always continuous from 0 to 100, so an invalid set can't
-  be entered.
-- **Check borderline students:** everyone within 1–3 marks below a cutoff, with
-  a one-click "Lower A to 78 (+3 students)".
-- **Undo, redo and reset** next to the chart (also Ctrl/Cmd+Z and
-  Shift+Ctrl/Cmd+Z). A whole drag is one step, each changed cutoff has its own
-  "Reset to 80", and "Reset to defaults" can be undone from an inline notice.
-- **Track progress across courses:** each course shows Not started, In progress
-  or Downloaded, and cutoffs are kept per course. They survive a refresh when you
-  upload the same file again (see "What it stores" below).
-- **Find a student** by BITS ID (from 4 characters, partial and
-  case-insensitive) to see their mark and current grade, with their bar
-  highlighted.
-- **Dark mode** that follows your system, with a Light / Dark / System switch.
-- **Review, then download.** A review dialog summarises the grade counts, the
-  cutoffs changed from the defaults, exactly which students' grades differ from
-  the defaults (for example "20247096 · 79 · A- to A"), the grading time, and anyone
-  still on a boundary before the CSV downloads. The CSV format is identical to Stage 1.
+![The grading console in the light theme at 1440px](docs/screenshots/final/loaded-1440.png)
+![The same screen in the dark theme](docs/screenshots/final/loaded-1440-dark.png)
 
-## What it stores on your computer
-To survive a refresh, the app saves each course's **cutoffs and download status**
-in your browser's `localStorage`, keyed by the file name and a fingerprint of the
-course names. It never stores **marks or BITS IDs**: those stay only in the page's memory
-and are gone when you close it. Nothing is sent anywhere. Upload the same file again
-and your cutoffs come back, with a "Start over" option. If the browser blocks storage
-(for example in some private windows), the app works the same but doesn't remember.
+## What changed
 
-Details: [ENHANCEMENTS.md](ENHANCEMENTS.md) (Stage 2),
-[BUG_FIX_LOG.md](BUG_FIX_LOG.md) (bugs #1–#35),
-[AI_USAGE.md](AI_USAGE.md) (how AI tools were used).
+### Debug
+I fixed the 30 bugs in the original app, and 18 more (#31–#52) found in
+hands-on reviews of my own changes. Each fix has a failing test first. The
+most consequential ones:
+- **Students silently disappeared.** A decimal mark, or ranges that left a gap
+  in 0–100, meant a student got no grade and was left out of the export
+  (#7, #8). Every student now gets exactly one grade.
+- **Duplicate BITS IDs were graded twice** (#28). Now they are rejected with
+  the row numbers.
+- **The CSV could run formulas.** A value starting with `=`, `+`, `-` or `@`
+  ran as a formula when opened in Excel (#29). It is now escaped.
 
-## Run it locally
-There's no build step. The only runtime dependencies are SheetJS 0.18.5 and IBM
-Plex Sans from CDNs, with a system-font fallback. Open `index.html` directly, or
-serve the folder:
+Every bug, with repro, cause, fix and test: [BUG_FIX_LOG.md](BUG_FIX_LOG.md).
 
+### Reimagine
+Each change starts from a problem an instructor actually has:
+- **E1 Cutoff editor.** Sixteen Min/Max dropdowns made it easy to leave
+  gaps and overlaps. Now there is one "from" value per grade, and the ranges
+  can't become invalid.
+- **E2 Chart with cutoffs.** Cutoffs used to be set blind, away from the
+  data. Now you drag them on the histogram, and each bar takes its grade's
+  colour as you go.
+- **E3 Borderline students.** The students one mark short of a grade were
+  hard to find. Now they are listed per cutoff, with a one-click "Lower A to
+  79 (+1 student)".
+- **E4 Review before export.** One click used to download final grades. Now
+  a review shows the counts, the changed cutoffs, and anyone still on a
+  boundary first.
+- **E9 Impact of changes.** "Which students did my change affect?" had no
+  answer. Now the review lists exactly whose grade differs from the defaults.
+
+Supporting improvements: undo and redo (E5), per-course progress and autosave
+(E6), find a student by BITS ID (E7), and dark mode (E8). Problem, solution and
+tests for each: [ENHANCEMENTS.md](ENHANCEMENTS.md).
+
+### Deploy
+A static single-file app (`index.html`) on GitHub Pages: no build step, no
+server. SheetJS is pinned to 0.18.5 on a CDN, with a vendored copy as fallback.
+
+## Privacy
+Marks never leave the browser: nothing is uploaded anywhere. To survive a
+refresh, the app saves only each course's cutoffs and download status, plus
+your theme, in `localStorage`. It never stores marks or BITS IDs. If the
+browser blocks storage, the app works the same but doesn't remember.
+
+## Run locally
 ```sh
 npx serve .
 ```
+Opening `index.html` directly also works.
 
-## Develop and test
-Node is only needed for the dev tooling:
-
+Tests (Node is only needed for the dev tooling):
 ```sh
-npm install
-npx playwright install chromium webkit firefox
-node fixtures/generate.js   # regenerate the .xlsx test fixtures
-npx playwright test         # run the suite in Chromium, WebKit and Firefox (starts its own server)
-npx playwright test --project=chromium   # one engine only
+npm ci
+npx playwright install
+npx playwright test          # full suite: Chromium, WebKit and Firefox
 ```
 
-Screenshots for the docs are generated with
-`SHOTS_OUT=docs/screenshots/after npx playwright test -c playwright.screenshots.config.js scripts/screenshots.spec.js`
-(add `SHOTS_THEME=dark` for the dark set). `SHOTS_OG=1 … -g og-image` regenerates the
-link-preview image, `assets/og-image.png`.
+| Browser  | Full suite                   | Where                    |
+|----------|------------------------------|--------------------------|
+| Chromium | 192 passed                   | macOS and GitHub Actions |
+| WebKit   | 190 passed, 2 skipped¹       | macOS and GitHub Actions |
+| Firefox  | _pending CI_                 | GitHub Actions (Ubuntu)  |
+
+¹ The two touch-drag tests need the Chrome DevTools Protocol, so they only
+run in Chromium.
+
+CI runs the suite on every push to `main`
+([workflow](.github/workflows/test.yml)).
+
+## Project structure
+```
+index.html              the app (the only file that ships)
+assets/                 logo, OG image, vendored SheetJS fallback
+fixtures/               .xlsx test files, their generator, demo_marks.xlsx
+tests/                  Playwright suite, golden CSVs, live smoke test
+scripts/                screenshot and logo tooling (dev only)
+docs/screenshots/       before/after, final and live screenshots
+original/               the untouched challenge source
+.github/workflows/      CI: the suite in three browsers
+BUG_FIX_LOG.md          every bug: repro, cause, fix, test
+ENHANCEMENTS.md         Stage 2: problem, solution, how tested
+AI_USAGE.md             how AI tools were used
+```
 
 ## Known limitations
 These were considered and deliberately left as they are.
 
-- **The dark colour tokens are declared twice**: once under `:root[data-theme="dark"]`
-  (the Dark choice in the theme menu) and once under
-  `@media (prefers-color-scheme: dark) :root:not([data-theme="light"])` (System).
-  Plain CSS can't share one block between an attribute selector and a media query
-  without a build step or JavaScript. A test compares the two blocks, so they can't drift apart.
-- **Undo history doesn't survive a refresh.** Cutoffs and download status are
-  saved per course and restored when the same file is uploaded again; the undo
-  and redo stacks are not. Undo is for changes within a session, and restoring a
-  history of changes made before a reload would be more surprising than useful.
-- **The longest course status is cut off on a phone.** At 390px, "Introduction to
-  Programming (Changed since download)" is wider than the full-width course
-  select. The native option list shows it in full.
-- **Firefox wasn't run on the development machine.** The suite has a Firefox
-  project, but Playwright 1.63's Firefox build doesn't launch on macOS 27.0, so
-  the recorded results are for Chromium and WebKit.
+- **The dark colour tokens are declared twice**: once under
+  `:root[data-theme="dark"]` (the Dark choice) and once under
+  `@media (prefers-color-scheme: dark)` (System). Plain CSS can't share one
+  block between the two without a build step. A test checks that the two
+  blocks are identical.
+- **Undo history doesn't survive a refresh.** Cutoffs and download status do.
+  Undo is for changes within a session.
+- **The longest course status is cut off on a phone.** At 390px, "Introduction
+  to Programming (Changed since download)" is wider than the course select.
+  The native option list shows it in full.
+- **Firefox is tested on CI only.** Playwright 1.63's Firefox doesn't launch on
+  the macOS 27 development machine, so Firefox runs on GitHub Actions (Ubuntu).
+
+## AI use
+This project was built with Claude Code. What it did and what I reviewed is
+in [AI_USAGE.md](AI_USAGE.md).
