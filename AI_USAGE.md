@@ -150,3 +150,22 @@ waited for my approval before changing anything.
 
 **Human review**
 I approved the plan before implementation. [To complete: my review of the Stage 2B commits.]
+
+## 2026-09-30: Stage 2C (restraint pass), Claude Code (Claude Opus 5.5)
+
+**What I asked for:** A pass that removes visual noise with no behaviour changes: one neutral bar tone, one chart label row, neutral chips, a quieter app bar with a theme menu, a dark-mode logo without a plate, icon undo/redo and a compact search, ink headings, and no "·" meta strings. One `style:` commit per item, with screenshots at 1440 and 390 in light and dark after each one.
+
+**What the AI did**
+- Planned in plan mode. I approved the plan, then the AI committed my CLAUDE.md principle ("colour is information, not decoration") and eight `style:` commits.
+- Took CLAUDE.md's exact tokens (`--bar`, `--bar-focus`, `--band-alt`) over the brief's "~55% ink-muted", and checked their contrast before writing code: bars 3.1–3.3:1, focused vs neutral bars 2.2–2.8:1.
+- Rewrote the tests that asserted colours or the old controls to test the same behaviour through `data-grade`, the theme menu and the new summary. Each rewrite is listed in ENHANCEMENTS.md, and none was deleted. Tests: 144 → 149.
+- Added `scripts/compose-restraint.mjs` for the before/after side-by-sides in `docs/screenshots/restraint/`, and a `theme-menu` screenshot state.
+- Went beyond the brief in one place, deliberately: CLAUDE.md bans "·" anywhere in the UI, so the search results and the review's impact list were restructured too (the latter as a small table), not just the setup summary.
+
+**Where the AI got things wrong, and how that was caught**
+- **Crowded labels at 390px.** The first value-only pills still staggered into two rows. Measuring the real geometry showed 28px needed against 27.7px available, so the padding was tightened to fit.
+- **App bar at 360px in dark.** The seal, name and "Grading console" wrapped, and the theme button dropped a line. Measuring showed a 1px overflow, fixed with narrow-screen spacing.
+- **Two script slips.** A token regex left two `--g-*-on` lines behind. A replacement aborted because one string was a substring of another, which also skipped a test edit. The failing test caught the second one.
+
+**Human review**
+I approved the plan before implementation. [To complete: my review of the Stage 2C commits.]
