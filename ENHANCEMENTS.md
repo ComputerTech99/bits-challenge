@@ -624,6 +624,14 @@ rewritten to check the same guarantee through the new UI. None was deleted.
 
 No new features. These are the fixes and the quieting pass before deployment; the bugs are logged in BUG_FIX_LOG.md (#36 onward).
 
+### Quieting (#47–#49)
+
+Pure styling, one `style:` commit each. Each removes ink that didn't help the instructor decide.
+
+| # | Change | How tested |
+|---|---|---|
+| 47 | **Cutoff steppers.** The − and + buttons lose their border and background and become icon buttons with a `--canvas` hover background. The number input keeps its border, so the one box in each row is the value itself. | `#47`: the stepper has a 0px border and a transparent background, `--canvas` on hover, and is still 40px tall; the input keeps its 1px border. Screenshots at 1440 and 390, light and dark. |
+
 ### Tests rewritten in the final fixes
 
 | Test | Why it changed | What it checks now |

@@ -492,15 +492,17 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .stepper{display:flex;align-items:center;gap:4px}
 .stepper input{width:56px;text-align:center;padding:0 4px;-moz-appearance:textfield}
 .stepper input::-webkit-inner-spin-button,.stepper input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+/* − and +: borderless icon buttons; only the number keeps a box (#47). */
 .step{
   width:40px;
   padding:0;
-  background:var(--surface);
-  border-color:var(--rule);
+  background:transparent;
+  border:none;
   color:var(--ink);
   font-size:18px;
   line-height:1;
 }
+.step:hover:not(:disabled){background:var(--canvas)}
 .fixed-value{width:144px;text-align:center;color:var(--ink-muted)}
 .note{margin:8px 0 0;font-size:12px;color:var(--ink-muted);min-height:18px}
 

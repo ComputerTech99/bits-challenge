@@ -2413,3 +2413,25 @@ test("#46 the search has its own quiet clear button, not the browser's blue one"
     r.selectorText?.includes("::-webkit-search-cancel-button") && r.style.display === "none")));
   expect(hidesNative).toBe(true);
 });
+
+// ===== Final fixes: quieting (#47–#49) =====
+
+// A token's computed colour, e.g. tokenColour(page, "--canvas") -> "rgb(245, 244, 250)".
+async function tokenColour(page, name) {
+  return page.evaluate(v => {
+    const probe = document.createElement("span"); document.body.append(probe);
+    probe.style.color = `var(${v})`; const c = getComputedStyle(probe).color; probe.remove(); return c;
+  }, name);
+}
+
+test("#47 the − and + steppers are borderless icon buttons; the number keeps its border", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  const step = page.locator('#grades .step').first();
+  await expect(step).toHaveCSS("border-top-width", "0px");
+  await expect(step).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await step.hover();
+  await expect(step).toHaveCSS("background-color", await tokenColour(page, "--canvas"));
+  await expect(cutoffInput(page, "A")).toHaveCSS("border-top-width", "1px");
+  const box = await step.boundingBox();
+  expect(box.height).toBe(40);
+});
