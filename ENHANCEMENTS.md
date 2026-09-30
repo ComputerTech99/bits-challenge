@@ -607,6 +607,7 @@ rewritten to check the same guarantee through the new UI. None was deleted.
 | # | Change |
 |---|---|
 | 1 | **Aurora bars.** Eight `--g-*` tokens per theme (A is the brightest in dark, so it stays the most prominent). Each bar is filled by its `data-grade`, so it recolours the moment a cutoff moves past it, with a 150ms fill fade that is off under reduced motion. `--bar` stays only as the fallback before grades are assigned. Every grade colour is ≥ 3:1 on the surface and on the band shade in both themes. |
+| 2 | **Neutral cutoff lines.** Lines use `--cutoff-line` (`--ink-muted` at 60%) now that the bars carry the colour. A handle's line, pill border and label take the accent only while it is hovered, dragged, or its cutoff is being edited in the cutoff editor (the handles are `aria-hidden`, so editing the input is how a keyboard user "focuses" one). New test: all lines share one non-accent stroke at rest; hovering or editing B lights B's handle only. |
 
 ### Tests rewritten in Stage 2D
 

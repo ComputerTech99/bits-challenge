@@ -1109,6 +1109,27 @@ test("Stage 2D: bars fade to their new colour in 150ms, and not at all under red
   await expect(bar).toHaveCSS("transition-duration", "0s");
 });
 
+test("Stage 2D: cutoff lines are neutral; a handle takes the accent only while hovered, dragged or edited", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  const accent = await page.evaluate(() => getComputedStyle(document.querySelector("#reviewBtn")).backgroundColor);
+  const handle = page.locator('#hist .cutoff-handle[data-grade="B"]');
+  const line = handle.locator(".cutoff-line"), knob = handle.locator(".cutoff-knob");
+  const strokes = () => page.locator("#hist .cutoff-line").evaluateAll(ls => ls.map(l => getComputedStyle(l).stroke));
+  for (const s of await strokes()) expect(s).not.toBe(accent);
+  expect(new Set(await strokes()).size).toBe(1); // one neutral tone for every line
+  await knob.hover();
+  await expect(line).toHaveCSS("stroke", accent);
+  await expect(knob).toHaveCSS("stroke", accent);
+  await page.mouse.move(0, 0);
+  await expect(line).not.toHaveCSS("stroke", accent);
+  // Editing B's cutoff in the editor lights B's handle, and only B's.
+  await cutoffInput(page, "B").focus();
+  await expect(line).toHaveCSS("stroke", accent);
+  expect((await strokes()).filter(s => s === accent)).toHaveLength(1);
+  await cutoffInput(page, "B").blur();
+  await expect(line).not.toHaveCSS("stroke", accent);
+});
+
 for (const scheme of ["light", "dark"]) {
   test(`Stage 2D: the grade palette is ordered (OKLCH hue falls from A to E) in the ${scheme} theme`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: scheme });

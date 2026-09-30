@@ -31,6 +31,7 @@
   --g-A:#4e2999; --g-Am:#3343a6; --g-B:#005aa3; --g-Bm:#006d97;
   --g-C:#007b8b; --g-Cm:#00887e; --g-D:#0b936c; --g-E:#4e9a52;
   --bar:#8f8ca0; --bar-focus:var(--accent); --band-alt:#f8f7fc;
+  --cutoff-line:color-mix(in srgb,var(--ink-muted) 60%,transparent);
   --font:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   --radius-panel:12px; --radius-control:8px;
 }
@@ -49,6 +50,7 @@
   --g-A:#c0aeff; --g-Am:#98b1ff; --g-B:#72b4f8; --g-Bm:#52b5df;
   --g-C:#45b2c2; --g-Cm:#3faea4; --g-D:#43a883; --g-E:#5a9f5d;
   --bar:#6e6b88; --bar-focus:#c4b5ff; --band-alt:#201f35;
+  --cutoff-line:color-mix(in srgb,var(--ink-muted) 60%,transparent);
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
@@ -62,6 +64,7 @@
     --g-A:#c0aeff; --g-Am:#98b1ff; --g-B:#72b4f8; --g-Bm:#52b5df;
     --g-C:#45b2c2; --g-Cm:#3faea4; --g-D:#43a883; --g-E:#5a9f5d;
     --bar:#6e6b88; --bar-focus:#c4b5ff; --band-alt:#201f35;
+    --cutoff-line:color-mix(in srgb,var(--ink-muted) 60%,transparent);
   }
 }
 
@@ -375,15 +378,17 @@ button:disabled{opacity:.45;cursor:not-allowed}
 #hist .bar.active,#hist .bar.highlight{fill:var(--bar-focus)}
 /* Highlighting one mark dims the rest. */
 #hist.has-highlight .bar:not(.highlight){opacity:.35}
-#hist .cutoff-line{stroke:var(--accent);stroke-width:1.5}
+/* Cutoff lines are neutral (the bars carry the colour). */
+#hist .cutoff-line{stroke:var(--cutoff-line);stroke-width:1.5}
 /* The one label row: calm "A 80" pills with a neutral border. */
 #hist .cutoff-knob{fill:var(--surface);stroke:var(--rule-strong);stroke-width:1}
 #hist .cutoff-label{font-weight:500;fill:var(--ink);pointer-events:none}
 #hist .cutoff-handle,#hist .handle-hit{cursor:ew-resize;touch-action:none}
-/* Active (hovered or being dragged): a heavier line, accent border and text. */
-#hist .cutoff-handle:hover .cutoff-line,#hist .cutoff-handle.dragging .cutoff-line{stroke-width:2.5}
-#hist .cutoff-handle:hover .cutoff-knob,#hist .cutoff-handle.dragging .cutoff-knob{stroke:var(--accent)}
-#hist .cutoff-handle:hover .cutoff-label,#hist .cutoff-handle.dragging .cutoff-label{fill:var(--accent)}
+/* Active (hovered, dragged, or its cutoff being edited in the editor): the
+   one place the accent appears on the chart, on a heavier line, border and text. */
+#hist .cutoff-handle:is(:hover,.dragging,.focused) .cutoff-line{stroke:var(--accent);stroke-width:2.5}
+#hist .cutoff-handle:is(:hover,.dragging,.focused) .cutoff-knob{stroke:var(--accent)}
+#hist .cutoff-handle:is(:hover,.dragging,.focused) .cutoff-label{fill:var(--accent)}
 #hist .handle-hit{fill:transparent}
 #hist .default-marker line{stroke:var(--ink-muted);stroke-width:1;stroke-dasharray:3 3;opacity:.6}
 #hist .default-hit{fill:transparent}
@@ -1191,6 +1196,9 @@ function buildCutoffEditor(){
         <button type="button" class="link cutoff-reset" data-grade="${g}" hidden>Reset to ${DEFAULT_CUTOFFS[g]}</button>
       </div>`;
     const input=row.querySelector("input");
+    // Editing a cutoff lights its handle on the chart, as hovering it does.
+    input.addEventListener("focus",()=>chart && chart.handles[g].classList.add("focused"));
+    input.addEventListener("blur",()=>chart && chart.handles[g].classList.remove("focused"));
     // A run of −/+ clicks or arrow/typed edits on one cutoff is one undo step.
     row.querySelectorAll(".step").forEach(b=>{
       b.onclick=()=>userSetCutoff(g,cutoffs[g]+Number(b.dataset.step),"step "+g);
@@ -1572,6 +1580,8 @@ function buildChart(animate){
   const handleLayer=svgEl("g",{class:"handles","aria-hidden":"true"},hist);
   CUTOFF_GRADES.forEach(g=>{
     const h=svgEl("g",{class:"cutoff-handle","data-grade":g},handleLayer);
+    // A rebuild (e.g. on resize) keeps the handle lit if its cutoff is being edited.
+    h.classList.toggle("focused",document.activeElement?.id==="cut-"+g.replace("-","m"));
     svgEl("rect",{class:"handle-hit",y:m.top,width:hitWidth,height:plotH},h);
     svgEl("line",{class:"cutoff-line",y1:m.top-6,y2:base},h); // up to its pill
     // The grab pill: "A 80", sized and placed in updateChart().
