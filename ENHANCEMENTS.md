@@ -409,6 +409,6 @@ rewritten to check the same guarantee through the new UI. None was deleted.
 | #18 (ordinals) | E4 | 23 finalizes through the dialog. |
 | #27b (blocked export clears on re-upload) | E4 | The blocked attempt clicks "Review grades". |
 | setup: collapses to a summary (summary text) | Stage 2B, #33: the summary no longer repeats the instructor, who is shown in the app bar. | The summary reads `demo_marks.xlsx · 148 students · 3 courses`. Collapse, Edit and focus are checked as before. |
-| #19 ×2 (reset asks once / dismiss keeps cutoffs) | E5 moved the button to the chart panel header as "Reset to defaults" (`#resetAll`). | The same guarantees through the new button. |
+| #19 ×2 (reset asks once / dismiss keeps cutoffs) | E5 moved the button to the chart panel header as "Reset to defaults" (`#resetAll`). Then #35 removed the `confirm()`. | The guarantee that a reset never costs you your cutoffs, now through undo: (a) one click resets every cutoff and no dialog appears; (b) the notice's Undo restores the cutoffs. |
 | #22 (reset inert before a course) | E5: the button is inside the chart panel, which is hidden until a course is open. | Hidden and disabled on a fresh page and after an upload. A dispatched click causes no error and no dialog. |
 | E1: the action bar counts changes | E5: the reset button left the action bar. | Same counts. The enabled/disabled check now uses `#resetAll`. |

@@ -362,22 +362,26 @@ test("#18 attempt ordinals are correct (21st, 22nd, 23rd, 11th–13th)", async (
   }
 });
 
-test("#19 Reset cutoffs asks for confirmation once", async ({ page }) => {
+test("#19 Reset cutoffs resets every cutoff at once, without a native dialog", async ({ page }) => {
+  // Stage 1 fixed a double confirm(). Stage 2B (#35) removed the confirm()
+  // itself: resetting is safe because it can be undone (E5).
   await startGrading(page, "valid_basic.xlsx", "CS F211");
   await typeCutoff(page, "A", 90);
   const dialogs = [];
   page.on("dialog", d => { dialogs.push(d.message()); d.accept(); });
-  await page.click("#resetAll"); // Stage 2B (E5): "Reset to defaults" in the chart panel header
+  await page.click("#resetAll");
   await expect(cutoffInput(page, "A")).toHaveValue("80");
   await expect(rangeText(page, "A-")).toHaveText("A-: 70–79");
-  expect(dialogs).toHaveLength(1);
+  expect(dialogs).toEqual([]);
 });
 
-test("#19 dismissing the confirmation leaves the cutoffs alone", async ({ page }) => {
+test("#19 a reset by mistake loses nothing: Undo brings the cutoffs back", async ({ page }) => {
+  // Was "dismissing the confirmation leaves the cutoffs alone". Stage 2B (#35):
+  // the same protection, now through Undo instead of a confirm().
   await startGrading(page, "valid_basic.xlsx", "CS F211");
   await typeCutoff(page, "A", 90);
-  page.on("dialog", d => d.dismiss());
   await page.click("#resetAll");
+  await page.locator("#resetNotice").getByRole("button", { name: "Undo" }).click();
   await expect(cutoffInput(page, "A")).toHaveValue("90");
 });
 
@@ -1372,7 +1376,6 @@ test("E5: each changed cutoff offers 'Reset to <default>' for just that cutoff",
 });
 
 test("E5: after 'Reset to defaults' an inline notice offers Undo", async ({ page }) => {
-  page.on("dialog", d => d.accept());
   await startGrading(page, "demo_marks.xlsx", INTRO);
   await typeCutoff(page, "A", 78);
   await typeCutoff(page, "B-", 52);
@@ -1411,6 +1414,17 @@ test("E5: the bottom bar keeps the change count and Review grades only", async (
   await expect(head.getByRole("button", { name: "Undo" })).toBeVisible();
   await expect(head.getByRole("button", { name: "Redo" })).toBeVisible();
   await expect(head.getByRole("button", { name: "Reset to defaults" })).toBeVisible();
+});
+
+test("#35 Reset to defaults uses no native confirm() anywhere", async ({ page }) => {
+  const dialogs = [];
+  page.on("dialog", d => { dialogs.push(d.type()); d.dismiss(); });
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await typeCutoff(page, "A", 78);
+  await page.click("#resetAll");
+  await expect(cutoffInput(page, "A")).toHaveValue("80"); // reset happened
+  await expect(page.locator("#resetNotice")).toBeVisible();
+  expect(dialogs).toEqual([]);
 });
 
 test.describe("#32 touch at 390px", () => {

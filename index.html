@@ -1139,7 +1139,7 @@ resetUndo.onclick=undo;
 
 resetAll.onclick=()=>{
   if(!grades.children.length) return; // no course open yet, so no cutoffs to reset
-  if(!confirm("Reset all grade cutoffs to the defaults (A 80, A- 70, B 60, B- 50, C 40, C- 30, D 20)?")) return;
+  // No confirm(): a reset is one undo step, and the notice offers Undo (#35).
   const before={...cutoffs};
   Object.assign(cutoffs,DEFAULT_CUTOFFS);
   render();

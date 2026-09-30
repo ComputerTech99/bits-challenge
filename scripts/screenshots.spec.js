@@ -36,7 +36,6 @@ const STATES = {
     await download(page);
   },
   "reset-notice": async page => {
-    page.on("dialog", d => d.accept()); // harmless once reset stops confirming
     await startGrading(page, DEMO, COURSE);
     await typeCutoff(page, "A", 78);
     await page.waitForTimeout(700);
