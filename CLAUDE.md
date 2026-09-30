@@ -20,13 +20,17 @@ Evaluated on: debugging, functionality, product thinking, creativity, UX,
 technical execution, deployment.
 
 ## Current stage
-**STAGE 2: REIMAGINE.** The task list is in STAGE2_PROMPT.md.
+**STAGE 2C: RESTRAINT PASS**, then the final fixes (#36–#39), then deploy.
+No new features. The job now is to remove visual noise and make the product
+feel finished. If a change adds ink rather than removing it, ask me first.
 
 ## Technical constraints
 - One self-contained `index.html` (HTML + CSS + JS inline). No framework, no
   bundler, no build step. It must work when opened directly and on GitHub Pages.
 - Allowed external resources, and only these:
   - SheetJS, pinned: `https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js`
+  - A vendored copy of the same SheetJS build at `assets/xlsx.full.min.js`,
+    loaded only if the CDN copy fails (#38).
   - Google Fonts (IBM Plex Sans), with a system-font fallback so the app
     still looks right offline.
   Ask before adding anything else.
@@ -58,8 +62,10 @@ technical execution, deployment.
   name + a fingerprint of the course list) and the theme, never marks or BITS IDs.
   Uploading the same file restores it with a "Start over" option. All storage
   access is wrapped in try/catch.
-- A course is "Downloaded" while its cutoffs match the last download; changing
-  them afterwards makes it "In progress" again.
+- A course is "Downloaded" while its cutoffs match the last download. Changing
+  them afterwards makes it "Changed since download" (not "In progress"), the
+  completion message is replaced by a prompt to download again, and moving the
+  cutoffs back to the downloaded values restores "Downloaded" (#37).
 - Reset never asks for confirmation; it is one undo step with an inline Undo.
 - **The CSV export format does not change**: same header block, same columns,
   same grade labels, BOM, formula-injection guard and filename pattern.
@@ -68,44 +74,65 @@ technical execution, deployment.
 ## Design system (applies to every component)
 Subject: a tool an instructor uses to make consequential decisions about
 students' grades. The feel is calm, precise and institutional, like a
-well-made mark sheet, not a marketing dashboard. Spend visual boldness in
-ONE place: the histogram with its grade bands. Everything else stays quiet.
+well-made mark sheet, not a marketing dashboard or an infographic. The chart
+is the centrepiece through its size and position, never through colour.
 
-**Colour tokens** (CSS custom properties on `:root`)
-- `--ink #1c1a33` (text) · `--ink-muted #5f5b78` · `--rule #e3e0ef` (borders)
+**Core principle: colour is information, not decoration.** The screen is
+neutral by default. The accent colour marks only (a) what is interactive,
+such as the primary action, focus rings and cutoff lines/handles, and (b) what
+the user is focused on right now: a hovered, searched or borderline
+student's bar, or a changed grade in the review. If something is coloured
+and it is neither interactive nor in focus, it should be neutral. There
+are no per-grade colours anywhere; the grade letter carries the meaning.
+Red (`--danger`) is for errors only.
+
+**Colour tokens, light** (CSS custom properties on `:root`)
+- `--ink #1c1a33` (text and all headings) · `--ink-muted #5f5b78` (labels,
+  secondary text) · `--rule #e3e0ef` (borders) · `--rule-strong #c9c3de`
+  (hover borders, axis, drop zone)
 - `--canvas #f5f4fa` (page) · `--surface #ffffff` (panels)
-- `--accent #5b3cc4` (BITS purple: primary action, focus, active cutoff)
-- `--accent-strong #312e81` (headings, app title) · `--accent-soft #eeeafb`
-  (quiet accent tint, e.g. the drop zone on hover)
-- `--danger #b42318` (errors ONLY; nothing else is ever red)
-- Grade colours, used for bars, chips and bands. Each letter has its own hue
-  and the minus grade is a lighter tint of it:
-  A `#3b2a9e` · A- `#7764d7` (indigo), B `#1f64a8` · B- `#5593cf` (blue),
-  C `#16806f` · C- `#479c8d` (teal), D `#a8661a` (amber), E `#6b6f85`
-  (slate; never red, so E doesn't read as an error). A-, B- and C- were
-  darkened from the first proposal (`#8574db`, `#6fa3d6`, `#63b8a9`) to pass:
-  every bar needs 3:1 against its band (the grade colour at 7% on the
-  surface, WCAG 1.4.11) and chip text needs AA. Chip text is white, except
-  ink on B- and C-. No outline-style bars. Tests enforce both ratios.
-- The bell curve is `--ink-muted`, dashed. Never red.
-- Supporting tokens: `--rule-strong #c9c3de` (hover borders, axis, drop zone),
-  `--on-accent #ffffff` (text on accent fills), `--danger-soft #fef3f2` and
-  `--danger-rule #f1c4bf` (error panel), `--shadow` and `--backdrop` (dialog
-  only), `--logo-plate`/`--logo-pad` (transparent/0 in light), and `--g-X-on`
-  (chip text per grade).
-- **Dark theme (E8):** the same tokens are redefined under `:root[data-theme="dark"]`
-  and under `@media (prefers-color-scheme: dark) :root:not([data-theme="light"])`
-  (the two blocks must stay identical; a test compares them). No component may
-  name a colour of its own; a test fails on any hex/rgb outside the token blocks.
-  Canvas `#121120` · surface `#1b1a2e` · rule `#2e2c45` · rule-strong `#45425f` ·
-  ink `#ecebf5` · ink-muted `#a6a3bf` · accent `#9b87f0` · accent-strong `#cfc6ff` ·
-  accent-soft `#2a2650` · on-accent `#121120` (white fails AA on the light accent) ·
-  danger `#f97066` · danger-soft `#3a1d22` · danger-rule `#6b2c2c`. Dark grade
-  colours: A `#6b59d3` · A- `#9080de` · B `#226db7` · B- `#5593cf` · C `#16806f` ·
-  C- `#479c8d` · D `#a8661a` · E `#6b6f85`. Chip text: white, except `#121120`
-  on A-, B- and C-. The logo sits on a light plate (`#f5f4fa`, 4px 8px padding).
-  The Light / Dark / System toggle lives in the app bar and is saved in
-  `localStorage` (`gradingConsole:v1:theme`).
+- `--accent #5b3cc4` (BITS purple) · `--accent-soft #eeeafb` (quiet tint,
+  e.g. a highlighted row or the drop zone on hover) · `--on-accent #ffffff`
+- `--bar #8f8ca0` (every histogram bar and share bar; 3.3:1 on the surface,
+  which meets WCAG 1.4.11) · `--bar-focus` = `--accent` (highlighted bars only)
+- `--band-alt #f8f7fc` (a barely visible shade on alternate grade bands so
+  they remain distinguishable; no other band tints)
+- `--danger #b42318` · `--danger-soft #fef3f2` · `--danger-rule #f1c4bf`
+- `--shadow`, `--backdrop` (review dialog only)
+- The bell curve is thin, dashed and `--ink-muted`.
+
+**Dark theme (E8).** The same tokens are redefined under `:root[data-theme="dark"]`
+and under `@media (prefers-color-scheme: dark) :root:not([data-theme="light"])`.
+The two blocks must stay identical (a test compares them). No component may
+name a colour of its own; a test fails on any hex/rgb outside the token blocks.
+Canvas `#121120` · surface `#1b1a2e` · rule `#2e2c45` · rule-strong `#45425f` ·
+ink `#ecebf5` · ink-muted `#a6a3bf` · accent `#9b87f0` · accent-soft `#2a2650` ·
+on-accent `#121120` (white fails AA on the light accent) · bar `#6e6b88` ·
+bar-focus `#c4b5ff` (lighter than the accent so focused bars clearly stand out) ·
+band-alt `#201f35` · danger `#f97066` · danger-soft `#3a1d22` · danger-rule `#6b2c2c`.
+Tests enforce: bars ≥ 3:1 against the surface and the band-alt shade in both
+themes, focused bars clearly distinct from neutral ones (hue plus ≥ 2:1
+lightness contrast), and all text ≥ AA.
+
+**Components**
+- **App bar:** logo, "Grading console", course name, grading time, and a single
+  theme icon button (sun/moon) that opens a small Light / Dark / System menu,
+  saved in `localStorage` (`gradingConsole:v1:theme`). Nothing else. The
+  instructor name and student count live in the setup summary.
+- **Logo:** in light mode, the full BITS Pilani Digital lockup. In dark mode,
+  the seal alone followed by "BITS Pilani Digital" set as text in `--ink`.
+  No plates or boxes behind the logo.
+- **Chart:** one row of labels only, the cutoff handles ("A 80", 12px, 500
+  weight, neutral border; accent on hover or drag; value only if labels
+  collide). No band-letter row. Bars in `--bar`; only focused bars in `--bar-focus`.
+- **Grade chips:** neutral: `--surface` background, 1px `--rule` border, `--ink`
+  text. Share is shown as a slim `--bar` horizontal bar, not colour.
+- **Panel headers:** heading in `--ink`, weight 600. Secondary actions are
+  quiet: icon buttons for undo/redo (with tooltip and `aria-label`), a text
+  button for reset, and a compact search field with an icon.
+- **No meta strings:** don't join facts with "·" in the UI. Use label/value
+  pairs with spacing. Statuses in native `<select>` options go in
+  parentheses, e.g. "Linear Algebra (Downloaded)".
 
 **Type**: IBM Plex Sans throughout (400/500/600). Scale 12 / 14 / 16 / 20 / 24px.
 All numbers use `font-variant-numeric: tabular-nums`. Values are heavier than
@@ -142,8 +169,10 @@ keyboard; errors and grade-count changes are announced via `aria-live`.
   UI, and never delete a test just to get the suite passing. Note each
   rewrite in ENHANCEMENTS.md.
 - After each visual change, take Playwright screenshots at 1440, 1024 and
-  390px wide using `fixtures/demo_marks.xlsx`, look at them, and fix
-  anything that looks off before committing.
+  390px wide, in light AND dark, using `fixtures/demo_marks.xlsx`. Look at
+  them and apply the subtraction test: if an element doesn't help the
+  instructor decide, remove it or make it quieter. Fix anything that looks
+  off before committing.
 - Append a dated entry to `AI_USAGE.md` at the end of every session.
 
 ## Repo layout
@@ -152,8 +181,9 @@ index.html            the app (the only file that ships)
 original/             untouched original source (read-only)
 fixtures/             generated .xlsx test files + generate script + demo_marks.xlsx
 tests/                Playwright tests
-docs/screenshots/     before/after screenshots for the submission
-BUG_FIX_LOG.md        Stage 1 log (#1–#30)
+docs/screenshots/     before/after (and restraint/) screenshots for the submission
+assets/               logo, favicon, OG image, vendored SheetJS fallback
+BUG_FIX_LOG.md        bug log: Stage 1 (#1–#30), review fixes (#31–#39)
 ENHANCEMENTS.md       Stage 2: problem → solution → how tested, per enhancement
 AI_USAGE.md           honest record of AI-tool use
 README.md             what it is, how to run, live URL
