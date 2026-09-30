@@ -191,3 +191,36 @@ I approved the plan before implementation. [To complete: my review of the Stage 
 
 **Human review**
 I approved the plan before implementation. [To complete: my review of the Stage 2D commits.]
+
+## 2026-09-30: Final fixes (#36–#50), Claude Code (Claude Opus 5.5)
+
+**What I asked for:** No new features. Fix the four items carried over from the Stage 2D review (#36 flaky clock tests, #37 "Changed since download", #38 SheetJS fallback, #39 link previews, last) and the review of the colour build (#40 re-selecting a file, #41 squashed chip dots, #42 wrapping ranges, #43 mobile layout, #44 handle labels inside the plot, #45 focus outline on narrow bars, #46 the browser's blue clear button). Then quiet the steppers, stats and borderline actions (#47–#49) and run the suite in WebKit and Firefox (#50). One commit per item, a failing test first, and screenshots at 1440 and 390 in light and dark.
+
+**What the AI did**
+- The session broke after #40 (Step 0, #36, #37, #38 and #40 were committed). I pasted the prompt again; it read the git log and the bug log to see where it had stopped, planned the rest in plan mode, and I approved the plan.
+- Reproduced each bug with a Playwright test that failed on the previous commit before fixing it (for #42 the wrap only showed with the system-font fallback; for #44 the A- label was already inside the plot at 390px with default cutoffs).
+- Tests: 171 at the start of the resumed session → 191 per engine now. Rewritten tests (the Stage 2D focus outline → caret, and the WebKit keyboard changes) are listed in ENHANCEMENTS.md; none was deleted.
+- Screenshots in `docs/screenshots/final/`; the link-preview image in `assets/og-image.png`.
+
+**Per-browser results (`npx playwright test`, final commit)**
+
+| Engine | Passed | Skipped | Failed |
+|---|---|---|---|
+| Chromium | 191 | 0 | 0 |
+| WebKit | 189 | 2 | 0 |
+| Firefox | not run | | |
+
+- WebKit's 2 skips are the `#32` touch-drag tests, which need the Chrome DevTools Protocol.
+- WebKit found one real bug, logged in #50: focus wasn't returned to "Review grades" after the review closed, because Safari doesn't focus a button on click.
+- Firefox: Playwright 1.63's Firefox build won't launch on this Mac (macOS 27.0). It exits with "Could not find profile folder", also when started by hand with a fresh profile, a different `HOME`, or outside the sandbox. The project is in the config for any machine where it launches.
+
+**Where the AI got things wrong, and how that was caught**
+- **An untestable assertion.** The first #46 test read `getComputedStyle(input, "::-webkit-search-cancel-button")`, which returns the input's own style. The test failed against the fix. It now checks that the hiding rule is in the page's styles.
+- **An icon that didn't follow hover.** The magnifier's `.search svg` rule also caught the new clear icon and pinned it to `--ink-muted`. The #46 hover assertion caught it.
+- **Assuming Tab reaches buttons everywhere.** Four keyboard tests failed in WebKit. Two were the real focus bug. The others were Safari's Tab behaviour and its select type-ahead window, handled in the tests (Option+Tab, a pause before type-ahead) rather than skipped.
+- **Wrong server directory for ad-hoc captures.** A scratch Playwright config started `serve` in the scratch folder, so the page never loaded. It was fixed by setting the server's `cwd`.
+
+**Decisions CLAUDE.md didn't cover:** a colliding handle label hides its whole pill, not only the text; the hovered or dragged handle always keeps its label. The action bar stays sticky, and its height is reserved with `scroll-padding-bottom`: no extra page padding, because a sticky bar sits in the page flow at the bottom. `theme-color` matches `--surface` (the app bar), not `--canvas`. The OG image hides the sticky bar so the x-axis shows.
+
+**Human review**
+I approved the plan before implementation. [To complete: my review of the final-fixes commits.]
