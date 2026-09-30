@@ -1130,6 +1130,50 @@ test("Stage 2D: cutoff lines are neutral; a handle takes the accent only while h
   await expect(line).not.toHaveCSS("stroke", accent);
 });
 
+// Stage 2D: focus never recolours. The focused bar keeps its grade colour and
+// gets a 1.5px ink outline; every other bar dims to 25%. Replaces the Stage 2C
+// check that a focused bar turned violet (--bar-focus).
+async function expectFocusedBar(page, mark) {
+  await expect(page.locator("#hist")).toHaveClass(/has-highlight/);
+  const colours = await gradeColours(page);
+  const ink = await page.evaluate(() => getComputedStyle(document.body).color);
+  const bars = await page.locator("#hist rect.bar").evaluateAll(bs => bs.map(b => {
+    const cs = getComputedStyle(b);
+    return { mark: Number(b.dataset.mark), g: b.dataset.grade, fill: cs.fill, opacity: cs.opacity, stroke: cs.stroke, width: cs.strokeWidth };
+  }));
+  const lit = bars.find(b => b.mark === mark);
+  expect(lit).toMatchObject({ fill: colours[lit.g], opacity: "1", stroke: ink, width: "1.5px" });
+  for (const b of bars.filter(b => b.mark !== mark)) {
+    expect.soft(b.opacity, `bar ${b.mark}`).toBe("0.25");
+    expect.soft(b.stroke, `bar ${b.mark}`).toBe("none");
+  }
+}
+
+for (const scheme of ["light", "dark"]) {
+  test.describe(`Stage 2D: focus dims the other bars (${scheme})`, () => {
+    test.beforeEach(async ({ page }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await startGrading(page, "demo_marks.xlsx", INTRO);
+    });
+    test("hovering a bar", async ({ page }) => {
+      await expect(page.locator("#hist")).not.toHaveClass(/has-highlight/);
+      await page.locator('#hist rect.hit[data-mark="65"]').hover(); // the full-height column over bar 65
+      await expectFocusedBar(page, 65);
+      await page.mouse.move(0, 0);
+      await expect(page.locator("#hist")).not.toHaveClass(/has-highlight/);
+      await expect(page.locator('#hist rect.bar[data-mark="65"]')).toHaveCSS("stroke", "none");
+    });
+    test("a search match", async ({ page }) => {
+      await page.fill("#findId", "20247096");
+      await expectFocusedBar(page, 79);
+    });
+    test("a borderline student", async ({ page }) => {
+      await page.locator('.bl-group[data-grade="B"] li').first().hover();
+      await expectFocusedBar(page, 59);
+    });
+  });
+}
+
 for (const scheme of ["light", "dark"]) {
   test(`Stage 2D: the grade palette is ordered (OKLCH hue falls from A to E) in the ${scheme} theme`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: scheme });
@@ -1848,23 +1892,6 @@ for (const scheme of ["light", "dark"]) {
       els.map(e => ({ g: e.textContent, fg: getComputedStyle(e).color, bg: getComputedStyle(e).backgroundColor })));
     for (const c of chips) expect.soft(contrast(c.fg, c.bg), `chip ${c.g}`).toBeGreaterThanOrEqual(4.5);
     for (const r of await barBandContrasts(page)) expect.soft(r, "bar").toBeGreaterThanOrEqual(3);
-    // A focused bar (here: a searched student's) differs in hue and by 2:1 in lightness.
-    // Stage 2D: bars carry grade colours now, so "neutral" is the --bar token.
-    const neutral = await page.evaluate(() => {
-      const p = document.createElement("span");
-      p.style.color = "var(--bar)";
-      document.body.append(p);
-      const c = getComputedStyle(p).color;
-      p.remove();
-      return c;
-    });
-    await page.fill("#findId", "20247096");
-    const lit = page.locator('#hist rect.bar[data-mark="79"]');
-    await expect(lit).toHaveClass(/highlight/);
-    const focus = await lit.evaluate(b => getComputedStyle(b).fill);
-    expect(contrast(focus, neutral)).toBeGreaterThanOrEqual(2);
-    const [r, g, b] = focus.match(/\d+/g).map(Number);
-    expect(b - Math.min(r, g)).toBeGreaterThan(40); // clearly violet, not a grey
     // Body text and muted text on the panel surface.
     const text = await page.evaluate(() => {
       const panel = getComputedStyle(document.querySelector(".panel")).backgroundColor;

@@ -26,11 +26,11 @@
   /* Chart: bars take their grade's colour from the "Aurora" ramp (violet A
      to green E, ordered in OKLCH; each >= 3:1 on the surface and band-alt).
      Grade colour appears only on bars, share bars and chip dots. --bar is the
-     fallback before grades are assigned. Focused bars (hover, search,
-     borderline) use --bar-focus. */
+     fallback before grades are assigned. A focused bar is never recoloured:
+     the others dim instead. */
   --g-A:#4e2999; --g-Am:#3343a6; --g-B:#005aa3; --g-Bm:#006d97;
   --g-C:#007b8b; --g-Cm:#00887e; --g-D:#0b936c; --g-E:#4e9a52;
-  --bar:#8f8ca0; --bar-focus:var(--accent); --band-alt:#f8f7fc;
+  --bar:#8f8ca0; --band-alt:#f8f7fc;
   --cutoff-line:color-mix(in srgb,var(--ink-muted) 60%,transparent);
   --font:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   --radius-panel:12px; --radius-control:8px;
@@ -49,7 +49,7 @@
   --shadow:0 24px 48px rgba(0,0,0,.5); --backdrop:rgba(0,0,0,.6);
   --g-A:#c0aeff; --g-Am:#98b1ff; --g-B:#72b4f8; --g-Bm:#52b5df;
   --g-C:#45b2c2; --g-Cm:#3faea4; --g-D:#43a883; --g-E:#5a9f5d;
-  --bar:#6e6b88; --bar-focus:#c4b5ff; --band-alt:#201f35;
+  --bar:#6e6b88; --band-alt:#201f35;
   --cutoff-line:color-mix(in srgb,var(--ink-muted) 60%,transparent);
 }
 @media (prefers-color-scheme: dark){
@@ -63,7 +63,7 @@
     --shadow:0 24px 48px rgba(0,0,0,.5); --backdrop:rgba(0,0,0,.6);
     --g-A:#c0aeff; --g-Am:#98b1ff; --g-B:#72b4f8; --g-Bm:#52b5df;
     --g-C:#45b2c2; --g-Cm:#3faea4; --g-D:#43a883; --g-E:#5a9f5d;
-    --bar:#6e6b88; --bar-focus:#c4b5ff; --band-alt:#201f35;
+    --bar:#6e6b88; --band-alt:#201f35;
     --cutoff-line:color-mix(in srgb,var(--ink-muted) 60%,transparent);
   }
 }
@@ -373,11 +373,11 @@ button:disabled{opacity:.45;cursor:not-allowed}
 #hist .bar[data-grade="C-"]{fill:var(--g-Cm)}
 #hist .bar[data-grade="D"]{fill:var(--g-D)}
 #hist .bar[data-grade="E"]{fill:var(--g-E)}
-/* The accent marks only the bar(s) in focus: hovered or keyboard-read (.active),
-   found by the search or hovered in the borderline list (.highlight). */
-#hist .bar.active,#hist .bar.highlight{fill:var(--bar-focus)}
-/* Highlighting one mark dims the rest. */
-#hist.has-highlight .bar:not(.highlight){opacity:.35}
+/* Focus (a bar hovered or keyboard-read, a search match, a hovered borderline
+   student) keeps the bar's grade colour: every other bar dims to 25% and the
+   focused one gets an ink outline. */
+#hist.has-highlight .bar:not(.highlight){opacity:.25}
+#hist .bar.highlight{stroke:var(--ink);stroke-width:1.5}
 /* Cutoff lines are neutral (the bars carry the colour). */
 #hist .cutoff-line{stroke:var(--cutoff-line);stroke-width:1.5}
 /* The one label row: calm "A 80" pills with a neutral border. */
@@ -1703,7 +1703,8 @@ function tooltipText(mark){
 }
 function showMarkTooltip(mark){
   if(!chart) return;
-  chart.bars.forEach((b,i)=>b && b.classList.toggle("active",i===mark));
+  chartMark=mark;
+  applyHighlight();
   tooltip.textContent=tooltipText(mark);
   const box=hist.getBoundingClientRect(), k=box.width/chart.W;
   const top=chart.counts[mark] ? chart.y(chart.counts[mark]) : chart.base;
@@ -1713,7 +1714,8 @@ function showMarkTooltip(mark){
 }
 function hideMarkTooltip(){
   if(!chart) return;
-  chart.bars.forEach(b=>b && b.classList.remove("active"));
+  chartMark=null;
+  applyHighlight();
   tooltip.hidden=true;
 }
 
@@ -1739,8 +1741,10 @@ hist.addEventListener("keydown",e=>{
   showMarkTooltip(focusMark);
 });
 
-// Highlighted bars dim the rest. Hovering a borderline student shows their
-// mark; otherwise the marks of the students found by the search (E7) stay lit.
+// Highlighted bars dim the rest. One mark is in focus at a time, in this
+// order: the bar under the pointer or keyboard on the chart, then a hovered
+// borderline student; otherwise the students found by the search (E7) stay lit.
+let chartMark=null;  // mark hovered or keyboard-read on the chart
 let hoverMark=null;  // mark under the pointer in the borderline list
 let searchMarks=[];  // marks of the students the search found
 function highlightMark(mark){
@@ -1749,7 +1753,8 @@ function highlightMark(mark){
 }
 function applyHighlight(){
   if(!chart) return;
-  const lit=new Set(hoverMark!==null ? [hoverMark] : searchMarks);
+  const lit=new Set(chartMark!==null && chart.bars[chartMark] ? [chartMark]
+    : hoverMark!==null ? [hoverMark] : searchMarks);
   hist.classList.toggle("has-highlight",lit.size>0);
   chart.bars.forEach((bar,i)=>{ if(bar) bar.classList.toggle("highlight",lit.has(i)); });
 }
