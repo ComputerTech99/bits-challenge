@@ -2142,6 +2142,10 @@ reviewBtn.onclick=()=>{
   reviewHeading.focus();
 };
 reviewBack.onclick=()=>reviewDialog.close();
+// However the review closes (Back, Esc, Download), focus returns to Review
+// grades. The dialog restores the previously focused element by itself, but
+// Safari doesn't focus a button on click, so there it fell back to <body> (#50).
+reviewDialog.addEventListener("close",()=>reviewBtn.focus());
 
 // "4 min 12 s" for the review. (The completion message keeps its original "sec" wording.)
 function formatDuration(ms){

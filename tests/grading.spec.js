@@ -854,7 +854,7 @@ test("E2: the chart can be read by keyboard, one mark at a time", async ({ page 
   await expect(page.locator("#tooltip")).toContainText("100 marks:");
   await page.keyboard.press("ArrowLeft");
   await expect(page.locator("#tooltip")).toContainText("99 marks:");
-  await page.keyboard.press("Tab");
+  await tab(page);
   await expect(page.locator("#tooltip")).toBeHidden();
 });
 
@@ -1246,18 +1246,18 @@ test("a11y: errors, notes and count changes are announced", async ({ page }) => 
 test("a11y: the whole flow works from the keyboard alone", async ({ page }) => {
   // Stage 2B (E8): the theme control in the app bar is the first stop (since
   // 2C one icon button), then the name field.
-  await page.keyboard.press("Tab");
+  await tab(page);
   await expect(page.locator("#themeBtn")).toBeFocused();
-  await page.keyboard.press("Tab");
+  await tab(page);
   await expect(page.locator("#instructor")).toBeFocused();
   await page.keyboard.type("Dr Rao");
-  await page.keyboard.press("Tab");
+  await tab(page);
   await expect(page.locator("#file")).toBeFocused();
   // The OS file picker can't be driven by a test; everything else is keyboard-only.
   await page.locator("#file").setInputFiles(fixture("demo_marks.xlsx"));
   await expect(page.locator("#course option")).toHaveCount(4);
-  await page.keyboard.press("Tab"); // sample-file link
-  await page.keyboard.press("Tab");
+  await tab(page); // sample-file link
+  await tab(page);
   await expect(page.locator("#course")).toBeFocused();
   // Type-ahead picks "Introduction to Programming" (headless tests can't drive
   // the native option popup that ↓ opens on macOS).
@@ -1268,7 +1268,7 @@ test("a11y: the whole flow works from the keyboard alone", async ({ page }) => {
   await page.locator("#hist").focus();
   await page.keyboard.press("ArrowRight");
   await expect(page.locator("#tooltip")).toBeVisible();
-  await page.keyboard.press("Tab");
+  await tab(page);
   await expect(page.locator("#cut-A")).toBeFocused(); // −/+ are skipped: 7 stops, not 21
   const start = Number(await page.locator("#cut-A").inputValue());
   await page.keyboard.press("ArrowDown");
@@ -1277,14 +1277,14 @@ test("a11y: the whole flow works from the keyboard alone", async ({ page }) => {
 
   // On to "Review grades", open it, and download from the dialog.
   for (let i = 0; i < 20 && !(await page.locator("#reviewBtn").evaluate(b => b === document.activeElement)); i++) {
-    await page.keyboard.press("Tab");
+    await tab(page);
   }
   await expect(page.locator("#reviewBtn")).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.locator("#reviewHeading")).toBeFocused();
-  await page.keyboard.press("Tab");
+  await tab(page);
   await expect(page.getByRole("button", { name: "Back to grading" })).toBeFocused();
-  await page.keyboard.press("Tab");
+  await tab(page);
   await expect(page.locator("#download")).toBeFocused();
   const [dl] = await Promise.all([page.waitForEvent("download"), page.keyboard.press("Enter")]);
   expect(dl.suggestedFilename()).toMatch(/^grades_/);
@@ -2143,12 +2143,28 @@ test("E9: the review shows the grading time, and the app bar calls it Grading ti
 
 // ===== Stage 2B: checks before finishing =====
 
+// One press of Tab (or Shift+Tab). WebKit on macOS follows Safari: Tab skips
+// buttons unless Full Keyboard Access is on, and Option+Tab reaches every
+// control, which is what a Safari keyboard user presses (#50).
+async function tab(page, { back = false } = {}) {
+  const webkit = page.context().browser().browserType().name() === "webkit";
+  await page.keyboard.press((back ? "Shift+" : "") + (webkit ? "Alt+Tab" : "Tab"));
+}
+
+// Type-ahead on a focused <select>. WebKit joins a key pressed within about a
+// second of the previous keystroke (the Tabs that reached the select) into one
+// search, so "L" would look for an option starting "<Tab>L". A person pauses.
+async function typeAhead(page, key) {
+  await page.waitForTimeout(1100);
+  await page.keyboard.press(key);
+}
+
 // Press Tab (or Shift+Tab) until `selector` has focus; fails if it takes more than `max` presses.
 async function tabTo(page, selector, { back = false, max = 40 } = {}) {
   const target = page.locator(selector);
   for (let i = 0; i < max; i++) {
     if (await target.evaluate(el => el === document.activeElement)) return;
-    await page.keyboard.press(back ? "Shift+Tab" : "Tab");
+    await tab(page, { back });
   }
   await expect(target).toBeFocused();
 }
@@ -2161,7 +2177,7 @@ test("a11y: keyboard-only walkthrough of the Stage 2B flow", async ({ page }) =>
   await page.locator("#file").setInputFiles(fixture("demo_marks.xlsx"));
   await expect(page.locator("#course option")).toHaveCount(4);
   await tabTo(page, "#course");
-  await page.keyboard.press("I"); // type-ahead: Introduction to Programming
+  await typeAhead(page, "I"); // Introduction to Programming
   await expect(page.locator("body")).toHaveClass(/grading/);
 
   // Change a cutoff with the arrow keys, then undo and redo it from the keyboard.
@@ -2191,7 +2207,7 @@ test("a11y: keyboard-only walkthrough of the Stage 2B flow", async ({ page }) =>
 
   // Switch course, then change the theme.
   await tabTo(page, "#course", { back: true, max: 80 });
-  await page.keyboard.press("L"); // Linear Algebra
+  await typeAhead(page, "L"); // Linear Algebra
   await expect(page.locator("#ctxCourse")).toHaveText("Linear Algebra");
   await expect(page.locator(`#course option[value="${INTRO}"]`)).toHaveText(`${INTRO} (Downloaded)`);
   await tabTo(page, "#themeBtn", { back: true });
@@ -2214,6 +2230,12 @@ test("ground truth still holds after Stage 2B: Introduction to Programming at de
 
 test.describe("#32 touch at 390px", () => {
   test.use({ viewport: { width: 390, height: 700 }, hasTouch: true, isMobile: true });
+  // Chromium only: a real touch *drag* (touchstart, moves, touchend that the
+  // browser may turn into a scroll) can only be sent through the Chrome
+  // DevTools Protocol. Playwright's cross-browser touchscreen API has tap()
+  // alone, and isMobile isn't supported in Firefox. The fix (a non-passive
+  // touchstart on the handles) is standard DOM and needs no engine-specific code (#50).
+  test.skip(({ browserName }) => browserName !== "chromium", "touch drags need the Chrome DevTools Protocol");
 
   test("#32 dragging a handle by touch moves the cutoff and does not scroll the page", async ({ page }) => {
     await startGrading(page, "demo_marks.xlsx", INTRO);
@@ -2298,10 +2320,13 @@ test.describe("#43 mobile layout at 390px", () => {
     expect(pad).toBeGreaterThanOrEqual(bar);
     // Bring the x-axis into view the way the browser does for focus/anchors:
     // it lands above the bar, not under it.
+    // (WebKit stops a few pixels lower than Chromium, inside the chart's empty
+    // bottom margin, so the check is on the x-axis labels themselves.)
     await page.locator("#hist").evaluate(el => el.scrollIntoView({ block: "end" }));
-    const hist = await page.locator("#hist").boundingBox();
+    const axisBottom = await page.locator('#hist .axes text[text-anchor="middle"]').evaluateAll(ts =>
+      Math.max(...ts.map(t => t.getBoundingClientRect().bottom)));
     const barBox = await page.locator(".actionbar").boundingBox();
-    expect(hist.y + hist.height).toBeLessThanOrEqual(barBox.y + 1);
+    expect(axisBottom).toBeLessThanOrEqual(barBox.y);
   });
 
   test("#43 the chart has at least 220px of plot and labels the x-axis every 20 marks", async ({ page }) => {
@@ -2465,8 +2490,10 @@ test("#49 borderline actions are quiet accent text buttons, underlined on hover 
   await btn.hover();
   await expect(btn).toHaveCSS("text-decoration-line", "underline");
   await page.mouse.move(0, 0);
+  // Focus after a key press counts as keyboard focus (:focus-visible) in every
+  // engine; Tab itself skips buttons in WebKit on macOS unless Full Keyboard Access is on.
+  await page.keyboard.press("Shift");
   await btn.focus();
-  await page.keyboard.press("Shift+Tab"); await page.keyboard.press("Tab"); // keyboard focus, for :focus-visible
   await expect(btn).toBeFocused();
   await expect(btn).toHaveCSS("text-decoration-line", "underline");
   await btn.click();

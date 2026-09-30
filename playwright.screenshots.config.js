@@ -3,4 +3,6 @@
 const { defineConfig } = require("@playwright/test");
 const base = require("./playwright.config.js");
 
-module.exports = defineConfig({ ...base, testDir: "scripts", testMatch: ["screenshots.spec.js", "capture-goldens.spec.js"] });
+// Screenshots come from Chromium only, so they aren't taken three times.
+module.exports = defineConfig({ ...base, testDir: "scripts", testMatch: ["screenshots.spec.js", "capture-goldens.spec.js"],
+  projects: [{ name: "chromium", use: { browserName: "chromium" } }] });
