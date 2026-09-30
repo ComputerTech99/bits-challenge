@@ -2303,3 +2303,55 @@ test("#43 wide charts keep an x-axis label every 10 marks", async ({ page }) => 
   const labels = await page.locator('#hist .axes text[text-anchor="middle"]').allTextContents();
   expect(labels).toEqual(["0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100"]);
 });
+
+// Visible handle pills (a hidden one has no box) and the plot's top edge, in page pixels.
+async function pillLayout(page) {
+  return page.evaluate(() => {
+    const plotTop = document.querySelector("#hist rect.hit").getBoundingClientRect().top;
+    const pills = [...document.querySelectorAll("#hist .cutoff-handle")].map(h => {
+      const r = h.querySelector(".cutoff-knob").getBoundingClientRect();
+      return { g: h.dataset.grade, shown: r.width > 0, bottom: r.bottom, text: h.querySelector(".cutoff-label").textContent };
+    });
+    return { plotTop, pills };
+  });
+}
+
+for (const width of [1440, 390]) {
+  test(`#44 handle labels sit in a strip above the plot, never inside it (${width}px)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await startGrading(page, "demo_marks.xlsx", INTRO);
+    for (const [g, v] of [[null], ["A-", 79], ["B", 69], ["C-", 39]]) {
+      if (g) await typeCutoff(page, g, v);
+      const { plotTop, pills } = await pillLayout(page);
+      for (const p of pills.filter(p => p.shown)) expect(p.bottom, `${p.g} after ${g} ${v}`).toBeLessThanOrEqual(plotTop);
+      if (width === 390) for (const p of pills) expect(p.text).toMatch(/^\d+$/); // values only when narrow
+    }
+    expect(await pillsOverlap(page)).toBe(false);
+  });
+}
+
+test.describe("#44 colliding labels at 390px", () => {
+  test.use({ viewport: { width: 390, height: 900 } });
+
+  test("#44 the less recently moved label hides, and comes back on hover or when moved", async ({ page }) => {
+    await startGrading(page, "demo_marks.xlsx", INTRO);
+    const shown = async g => (await pillLayout(page)).pills.find(p => p.g === g).shown;
+    await typeCutoff(page, "A-", 79); // A- was moved last, so A gives way
+    expect(await shown("A-")).toBe(true);
+    expect(await shown("A")).toBe(false);
+    await expect(page.locator('.cutoff-handle[data-grade="A"]')).toHaveClass(/label-off/);
+
+    // Hovering A's grab strip (on its right, clear of A-'s) brings A back and hides A-.
+    const p = await handlePoint(page, "A");
+    await page.mouse.move(p.x + 11, p.y);
+    expect(await shown("A")).toBe(true);
+    expect(await shown("A-")).toBe(false);
+    await page.mouse.move(p.x, p.y + 400); // away
+    expect(await shown("A")).toBe(false);
+
+    await typeCutoff(page, "A", 81);  // now A was moved last
+    expect(await shown("A")).toBe(true);
+    expect(await shown("A-")).toBe(false);
+    expect(await pillsOverlap(page)).toBe(false);
+  });
+});

@@ -388,6 +388,8 @@ button:disabled{opacity:.45;cursor:not-allowed}
 /* The one label row: calm "A 80" pills with a neutral border. */
 #hist .cutoff-knob{fill:var(--surface);stroke:var(--rule-strong);stroke-width:1}
 #hist .cutoff-label{font-weight:500;fill:var(--ink);pointer-events:none}
+/* A label that would collide with a more recently moved one (#44). */
+#hist .label-off :is(.cutoff-knob,.cutoff-label){display:none}
 #hist .cutoff-handle,#hist .handle-hit{cursor:ew-resize;touch-action:none}
 /* Active (hovered, dragged, or its cutoff being edited in the editor): the
    one place the accent appears on the chart, on a heavier line, border and text. */
@@ -948,7 +950,9 @@ function cutoffBounds(g){
 // The only way cutoffs change: clamp into bounds, then redraw. Returns the value used.
 function setCutoff(g,value){
   const [lo,hi]=cutoffBounds(g);
-  cutoffs[g]=Math.min(hi,Math.max(lo,Math.round(value)));
+  const v=Math.min(hi,Math.max(lo,Math.round(value)));
+  if(v!==cutoffs[g]) lastMoved[g]=++moveSeq; // its handle label wins a collision (#44)
+  cutoffs[g]=v;
   render();
   return cutoffs[g];
 }
@@ -1647,8 +1651,13 @@ function buildChart(animate){
     // still scrolls the page. (In Chromium, touch-action on SVG children alone
     // didn't stop the page panning mid-drag; test #32 checks this.)
     h.addEventListener("touchstart",e=>e.preventDefault(),{passive:false});
+    h.addEventListener("pointerenter",()=>setActiveHandle(g));
     h.addEventListener("pointermove",e=>{ if(!h.classList.contains("dragging")) showMarkTooltip(markAt(e.clientX)); });
-    h.addEventListener("pointerleave",()=>{ if(!h.classList.contains("dragging")) hideMarkTooltip(); });
+    h.addEventListener("pointerleave",()=>{
+      if(h.classList.contains("dragging")) return;
+      hideMarkTooltip();
+      setActiveHandle(null);
+    });
     chart.handles[g]=h;
   });
 
@@ -1677,12 +1686,14 @@ function updateChart(){
   applyHighlight();
 }
 
-// The chart's one label row: each handle's pill ("A 80") sits on its line
-// above the plot. If any two would touch, every pill shows its value only
-// ("80"), and the grade letters stay in the cutoff editor. If even values
-// touch (adjacent cutoffs on a narrow chart), the later pill drops just
-// inside the top of the plot, so no label ever covers another.
+// The chart's one label row: each handle's pill ("A 80") sits on its line in
+// a strip above the plot, never inside it (#44). Narrow charts show values
+// only ("80"); wide ones do too if any two full labels would touch. If values
+// still collide, the pill of the less recently moved cutoff hides (its line
+// stays and can still be dragged) and comes back while it is hovered or dragged.
 const PILL_H=20, PILL_GAP=4, PILL_PAD=8;
+let moveSeq=0;
+const lastMoved={}; // grade -> when its cutoff last moved (a counter)
 function pillBoxes(valueOnly){
   const {x,m,W}=chart;
   // Left to right: D has the lowest cutoff, A the highest.
@@ -1693,23 +1704,33 @@ function pillBoxes(valueOnly){
     const w=(textW>0 ? Math.ceil(textW) : 7*label.textContent.length)+PILL_PAD;
     // Centred on the line, but kept inside the plot at either end.
     const left=Math.min(W-m.right-w,Math.max(m.left,x(cutoffs[g])-w/2));
-    return {h,label,w,left};
+    return {g,h,label,w,left};
   });
 }
 function layoutPills(){
-  const touch=boxes=>boxes.some((b,i)=>i>0 && b.left<boxes[i-1].left+boxes[i-1].w+PILL_GAP);
-  let boxes=pillBoxes(false);
-  if(touch(boxes)) boxes=pillBoxes(true);
-  const rowEnds=[-Infinity,-Infinity]; // right edge of the last pill in each row
-  boxes.forEach(({h,label,w,left})=>{
-    let row=rowEnds.findIndex(end=>left>=end+PILL_GAP);
-    if(row<0) row=rowEnds[0]<=rowEnds[1] ? 0 : 1; // both taken: the row that ends first
-    rowEnds[row]=left+w;
-    const top=row===0 ? chart.m.top-PILL_H-6 : chart.m.top+4;
-    const knob=h.querySelector(".cutoff-knob");
-    knob.setAttribute("x",left); knob.setAttribute("y",top); knob.setAttribute("width",w);
-    label.setAttribute("x",left+w/2); label.setAttribute("y",top+PILL_H/2+4);
+  const touch=(a,b)=>a.left<b.left+b.w+PILL_GAP && b.left<a.left+a.w+PILL_GAP;
+  const narrow=chart.W<500;
+  let boxes=pillBoxes(narrow);
+  if(boxes.some((b,i)=>i>0 && touch(b,boxes[i-1]))) boxes=pillBoxes(true);
+  // Who keeps a label: the handle under the pointer or being dragged, then
+  // the most recently moved, then A to D.
+  const rank=b=>b.g===chart.active ? Infinity : (lastMoved[b.g]||0);
+  const order=[...boxes].sort((a,b)=>rank(b)-rank(a) || CUTOFF_GRADES.indexOf(a.g)-CUTOFF_GRADES.indexOf(b.g));
+  const kept=[];
+  const top=chart.m.top-PILL_H-6;
+  order.forEach(b=>{
+    const off=kept.some(k=>touch(b,k));
+    b.h.classList.toggle("label-off",off);
+    if(!off) kept.push(b);
+    const knob=b.h.querySelector(".cutoff-knob");
+    knob.setAttribute("x",b.left); knob.setAttribute("y",top); knob.setAttribute("width",b.w);
+    b.label.setAttribute("x",b.left+b.w/2); b.label.setAttribute("y",top+PILL_H/2+4);
   });
+}
+function setActiveHandle(g){
+  if(!chart || chart.active===g) return;
+  chart.active=g;
+  layoutPills();
 }
 
 // Dragging a handle snaps to whole marks and goes through setCutoff(), so it
@@ -1742,6 +1763,7 @@ function startDrag(e,g,handle){
   };
   const end=()=>{
     handle.classList.remove("dragging");
+    setActiveHandle(null);
     recordChange(before);
     handle.removeEventListener("pointermove",move);
     handle.removeEventListener("pointerup",end);

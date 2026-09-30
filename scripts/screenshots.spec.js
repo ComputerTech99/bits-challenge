@@ -80,6 +80,12 @@ const STATES = {
     await page.focus("#themeBtn");
     await page.keyboard.press("Enter");
   },
+  "crowded-labels": async page => {
+    await startGrading(page, DEMO, COURSE);
+    await typeCutoff(page, "A-", 79);
+    await typeCutoff(page, "C", 41);
+    await page.waitForTimeout(700);
+  },
   "cutoff-moved": async page => {
     await startGrading(page, DEMO, COURSE);
     await typeCutoff(page, "A", 78);
