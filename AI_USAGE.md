@@ -19,7 +19,7 @@ I used Claude Code in the terminal, working from `CLAUDE.md` and a written Stage
 - A histogram screenshot showed the 10 px bin labels still running together, so they were reduced to 9 px.
 
 **Human review**
-I reviewed every change (code, tests, fixtures and documentation) before accepting it, and I can explain each fix. Product decisions not already covered by `CLAUDE.md` were listed for me by Claude Code, and I confirmed them. I approved the plan before implementation. The implementation was sometimes not enough, or the fix was not appropriate, and it took several turns to get it right. Sometimes that was a debugging issue, and sometimes it may have been a prompting issue.
+I reviewed every change (code, tests, fixtures and documentation) before accepting it, and I can explain each fix. Product decisions not already covered by `CLAUDE.md` were listed for me by Claude Code, and I confirmed them.
 
 ## 2026-09-29: Stage 1 follow-up (#26–#30), Claude Code (Claude Opus 5.5)
 
@@ -39,7 +39,7 @@ I gave Claude Code five further issues and a clean-up list, under the same rules
 - The commits for #1–#25 are missing the `Co-Authored-By` trailer. Rewriting that history was blocked and left for me to decide. The commits from this session include it.
 
 **Human review**
-I reviewed every change in this session (code, tests, fixtures and documentation) before accepting it. I approved the plan before implementation. The implementation was sometimes not enough, or the fix was not appropriate, and it took several turns to get it right. Sometimes that was a debugging issue, and sometimes it may have been a prompting issue.
+I reviewed every change in this session (code, tests, fixtures and documentation) before accepting it. I had the finished Stage 1 reviewed independently, which found five more bugs (#26–#30), including a chart-scaling formula from my own spec that overflowed the canvas.
 
 ## 2026-09-29: Stage 2 (Reimagine), Claude Code (Claude Opus 5.5)
 
@@ -87,10 +87,9 @@ borderline action rule, how to handle the lift/pulse tests, and the
 
 **Human review**
 I reviewed every change in this session (code, tests, fixtures, screenshots and
-documentation) before accepting it. I approved the plan before implementation.
-The implementation was sometimes not enough, or the fix was not appropriate, and
-it took several turns to get it right. Sometimes that was a debugging issue, and
-sometimes it may have been a prompting issue.
+documentation) before accepting it. On first use I couldn't tell what the drag
+handles were for, so I asked for them to be labelled; I also found the reset
+button undiscoverable and asked for dark mode.
 
 ## 2026-09-29 to 2026-09-30: Stage 2B (fixes from review + E5–E9), Claude Code (Claude Opus 5.5)
 
@@ -152,7 +151,7 @@ waited for my approval before changing anything.
   serving the old file from a scratch folder.
 
 **Human review**
-I approved the plan before implementation. The implementation was sometimes not enough, or the fix was not appropriate, and it took several turns to get it right. Sometimes that was a debugging issue, and sometimes it may have been a prompting issue.
+Testing with the demo file, I asked for undo/redo and a reset next to the chart (E5), and switched Claude Code to manual approval when auto mode's safety check stalled.
 
 ## 2026-09-30: Stage 2C (restraint pass), Claude Code (Claude Opus 5.5)
 
@@ -171,7 +170,7 @@ I approved the plan before implementation. The implementation was sometimes not 
 - **Two script slips.** A token regex left two `--g-*-on` lines behind. A replacement aborted because one string was a substring of another, which also skipped a test edit. The failing test caught the second one.
 
 **Human review**
-I approved the plan before implementation. The implementation was sometimes not enough, or the fix was not appropriate, and it took several turns to get it right. Sometimes that was a debugging issue, and sometimes it may have been a prompting issue.
+I judged that the redesign had become visually loud and unprofessional, and asked for a restraint pass.
 
 ## 2026-09-30: Stage 2D (chart colour), Claude Code (Claude Opus 5.5)
 
@@ -193,7 +192,7 @@ I approved the plan before implementation. The implementation was sometimes not 
 **Open point for me:** at 390px a bar is ~3px wide, so the 1.5px ink outline covers most of a focused bar's fill; in dark it reads as a near-white bar.
 
 **Human review**
-I approved the plan before implementation. The implementation was sometimes not enough, or the fix was not appropriate, and it took several turns to get it right. Sometimes that was a debugging issue, and sometimes it may have been a prompting issue.
+I then found the neutral chart lifeless, compared three rendered palettes, and chose Aurora.
 
 ## 2026-09-30: Final fixes (#36–#50), Claude Code (Claude Opus 5.5)
 
@@ -226,7 +225,7 @@ I approved the plan before implementation. The implementation was sometimes not 
 **Decisions CLAUDE.md didn't cover:** a colliding handle label hides its whole pill, not only the text; the hovered or dragged handle always keeps its label. The action bar stays sticky, and its height is reserved with `scroll-padding-bottom`: no extra page padding, because a sticky bar sits in the page flow at the bottom. `theme-color` matches `--surface` (the app bar), not `--canvas`. The OG image hides the sticky bar so the x-axis shows.
 
 **Human review**
-I approved the plan before implementation. The implementation was sometimes not enough, or the fix was not appropriate, and it took several turns to get it right. Sometimes that was a debugging issue, and sometimes it may have been a prompting issue.
+I decided each design call Claude Code flagged, and chose to run Firefox on CI rather than drop it.
 
 ## 2026-09-30: Ship it (#51, #52, README, GitHub Pages), Claude Code (Claude Opus 5.5)
 
@@ -253,4 +252,4 @@ I approved the plan before implementation. The implementation was sometimes not 
 - **A timing-sensitive test** (#52), caught by running the full suite three times before committing.
 
 **Human review**
-I approved the plan before implementation. The implementation was sometimes not enough, or the fix was not appropriate, and it took several turns to get it right. Sometimes that was a debugging issue, and sometimes it may have been a prompting issue.
+I made the repo public, added the Pages workflow, and refreshed the gh token's workflow scope myself.
