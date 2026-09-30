@@ -2527,6 +2527,7 @@ test("#39 the page describes itself for link previews", async ({ page }) => {
   expect(await meta('meta[property="og:title"]')).toBe("Grading console");
   expect(await meta('meta[property="og:description"]')).toBe(await meta('meta[name="description"]'));
   expect(await meta('meta[property="og:type"]')).toBe("website");
+  expect(await meta('meta[property="og:url"]')).toBe("https://computertech99.github.io/bits-challenge/");
   expect(await meta('meta[name="twitter:card"]')).toBe("summary_large_image");
   // Scrapers need an absolute URL; the file itself is the 1200×630 Open Graph size.
   const image = await meta('meta[property="og:image"]');
