@@ -203,15 +203,22 @@ button.icon-btn:hover:not(:disabled){border-color:var(--rule);color:var(--ink)}
   min-width:0;
 }
 .panel > h2{margin-bottom:12px}
-/* Panel header: title and help on the left, tools on the right (wraps when narrow). */
+/* Panel header: title and help on the left, quiet tools on the right (wraps when narrow). */
 .panel-head{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:8px 16px;margin-bottom:12px}
 .panel-head .help{margin-top:4px}
-.toolbar{display:flex;flex-wrap:wrap;gap:8px}
-/* Search row: the field, then its results inline (wrapping under it when narrow). */
-.find-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin-bottom:12px}
-.find{display:flex;align-items:center;gap:8px}
-.find input{width:176px}
-.find-results{display:flex;flex-wrap:wrap;align-items:center;gap:4px 16px;min-width:0}
+.tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+/* Undo and redo: two icon buttons sharing one outline. */
+.icon-group{display:inline-flex;padding:1px;border:1px solid var(--rule);border-radius:var(--radius-control)}
+.icon-group button.icon-btn{height:36px;width:36px;border:none;border-radius:6px}
+.icon-group button.icon-btn:hover:not(:disabled){background:var(--canvas)}
+/* A secondary action that doesn't need a box. */
+button.text-btn{padding:0 8px;background:none;color:var(--ink)}
+button.text-btn:hover:not(:disabled){background:var(--canvas)}
+/* Find a student: a compact search field with its icon inside. */
+.search{position:relative;display:flex}
+.search svg{position:absolute;left:12px;top:12px;width:16px;height:16px;fill:none;stroke:var(--ink-muted);stroke-width:2;stroke-linecap:round;pointer-events:none}
+.search input{width:200px;padding-left:36px}
+.find-results{display:flex;flex-wrap:wrap;align-items:center;gap:4px 16px;min-width:0;margin-bottom:12px}
 .find-results:empty{display:none}
 .find-results ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:4px 16px}
 .find-results li{display:flex;align-items:center;gap:6px;white-space:nowrap}
@@ -579,6 +586,10 @@ body.grading .empty-state{display:none}
 }
 @media (max-width:600px){
   .appbar,.container,.actionbar-inner{padding-left:16px;padding-right:16px}
+  /* The search takes its own full-width row under undo, redo and reset. */
+  .tools{width:100%}
+  .search{flex:1 1 100%}
+  .search input{width:100%}
   /* The theme button stays top-right, beside the brand; the course and time wrap under. */
   .brand{flex:1}
   .theme{order:1}
@@ -687,19 +698,23 @@ try{
         <h2 id="analysisHeading">Distribution and cutoffs</h2>
         <p class="help" id="chartHelp">Drag a line or use the controls below to move a cutoff.</p>
       </div>
-      <div class="toolbar" role="group" aria-label="Cutoff changes">
-        <button type="button" class="secondary" id="undoBtn" disabled>Undo</button>
-        <button type="button" class="secondary" id="redoBtn" disabled>Redo</button>
-        <button type="button" class="secondary" id="resetAll" disabled>Reset to defaults</button>
+      <div class="tools">
+        <div class="icon-group" role="group" aria-label="Cutoff changes">
+          <button type="button" class="icon-btn" id="undoBtn" aria-label="Undo" data-tip="Undo" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+          </button>
+          <button type="button" class="icon-btn" id="redoBtn" aria-label="Redo" data-tip="Redo" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>
+          </button>
+        </div>
+        <button type="button" class="text-btn" id="resetAll" disabled>Reset to defaults</button>
+        <div class="search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input type="search" id="findId" aria-label="Find a student" placeholder="Find by BITS ID" autocomplete="off" spellcheck="false">
+        </div>
       </div>
     </div>
-    <div class="find-row">
-      <div class="find">
-        <label for="findId">Find a student</label>
-        <input type="search" id="findId" placeholder="BITS ID" autocomplete="off" spellcheck="false">
-      </div>
-      <div class="find-results" id="findResults" aria-live="polite"></div>
-    </div>
+    <div class="find-results" id="findResults" aria-live="polite"></div>
     <p class="inline-notice" id="resetNotice" role="status" hidden><span>Cutoffs reset to defaults.</span>
       <button type="button" class="link" id="resetUndo">Undo</button></p>
     <div class="chart" id="chartBox">

@@ -1445,6 +1445,16 @@ test("E5: the bottom bar keeps the change count and Review grades only", async (
   await expect(head.getByRole("button", { name: "Undo" })).toBeVisible();
   await expect(head.getByRole("button", { name: "Redo" })).toBeVisible();
   await expect(head.getByRole("button", { name: "Reset to defaults" })).toBeVisible();
+  // Stage 2C: the search sits in the same header row, and the icon-only undo
+  // and redo show their name in a tooltip on keyboard focus.
+  await expect(head.getByRole("searchbox", { name: "Find a student" })).toBeVisible();
+  await typeCutoff(page, "A", 78);
+  await tabTo(page, "#undoBtn", { back: true });
+  const tip = () => page.locator("#undoBtn").evaluate(b => {
+    const after = getComputedStyle(b, "::after");
+    return { text: after.content, opacity: after.opacity };
+  });
+  expect(await tip()).toEqual({ text: '"Undo"', opacity: "1" });
 });
 
 test("#35 Reset to defaults uses no native confirm() anywhere", async ({ page }) => {
