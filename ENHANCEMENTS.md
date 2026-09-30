@@ -619,3 +619,13 @@ rewritten to check the same guarantee through the new UI. None was deleted.
 | E8: chips AA and bars 3:1 per theme | 2D-1 / 2D-3: there is no neutral bar, and focus no longer recolours. | Chips AA and bars 3:1 per theme as before; the "focused bar is violet and 2:1 from the neutral bar" check is removed and replaced by the dimming tests below. |
 | New: focus dims the other bars (light and dark × hover a bar, search, borderline) | 2D-3 | The focused bar keeps its grade fill at full opacity with a 1.5px ink stroke; every other bar is at 0.25 opacity with no stroke; moving away clears it. The E3 and E7 highlight tests are unchanged. |
 | New: chip dots and share bars (2D-4) | 2D-4 (the chip AA and share-bar width tests are unchanged: chip text and background stay neutral) | Each distribution row's chip dot is 8×8px, and it and the share bar equal that grade's bar colour; every visible chip in the app (editor, E row, search results) has `data-grade` equal to its letter and a dot in that colour. |
+
+## Final fixes
+
+No new features. These are the fixes and the quieting pass before deployment; the bugs are logged in BUG_FIX_LOG.md (#36 onward).
+
+### Tests rewritten in the final fixes
+
+| Test | Why it changed | What it checks now |
+|---|---|---|
+| E6: each course shows Not started, In progress or Downloaded | #37: a change after a download is no longer "In progress". | After downloading and changing B, the option reads "(Changed since download)" and the summary drops to 0 of 3; undo still restores "Downloaded". |

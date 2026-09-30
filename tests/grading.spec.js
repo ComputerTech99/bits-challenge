@@ -1646,12 +1646,57 @@ test("E6: each course shows Not started, In progress or Downloaded", async ({ pa
   await download(page);
   expect(await optionLabel(page, INTRO)).toBe(`${INTRO} (Downloaded)`);
   await expect(page.locator("#sumProgress")).toHaveText("1 of 3 courses");
-  // A change after downloading means the file no longer matches: in progress again.
+  // A change after downloading means the file no longer matches. Rewritten in
+  // #37: this used to say "In progress"; it now says what actually happened.
   await typeCutoff(page, "B", 62);
-  expect(await optionLabel(page, INTRO)).toBe(`${INTRO} (In progress)`);
+  expect(await optionLabel(page, INTRO)).toBe(`${INTRO} (Changed since download)`);
   await expect(page.locator("#sumProgress")).toHaveText("0 of 3 courses");
   await page.click("#undoBtn"); // back to exactly what was downloaded
   expect(await optionLabel(page, INTRO)).toBe(`${INTRO} (Downloaded)`);
+});
+
+test("#37 editing after a download says so, and moving back restores Downloaded", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await typeCutoff(page, "A", 78);
+  await download(page);
+  await expect(page.locator("#thankyou")).toContainText("You completed grading");
+  await typeCutoff(page, "A", 77);
+  expect(await optionLabel(page, INTRO)).toBe(`${INTRO} (Changed since download)`);
+  await expect(page.locator("#sumProgress")).toHaveText("0 of 3 courses");
+  await expect(page.locator("#thankyou")).toHaveText(
+    "Cutoffs changed since your last download (A: 78 to 77). Download again to update the file.");
+  // Several changes are listed in grade order.
+  await typeCutoff(page, "B", 62);
+  await expect(page.locator("#thankyou")).toHaveText(
+    "Cutoffs changed since your last download (A: 78 to 77, B: 60 to 62). Download again to update the file.");
+  // Back to exactly what was downloaded: Downloaded, and the completion message returns.
+  await typeCutoff(page, "B", 60);
+  await typeCutoff(page, "A", 78);
+  expect(await optionLabel(page, INTRO)).toBe(`${INTRO} (Downloaded)`);
+  await expect(page.locator("#thankyou")).toContainText("You completed grading");
+});
+
+test("#37 the prompt to download again survives switching course and back", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await typeCutoff(page, "A", 78);
+  await download(page);
+  await typeCutoff(page, "A", 77);
+  await page.selectOption("#course", "Linear Algebra");
+  await expect(page.locator("#thankyou")).toBeEmpty();
+  await page.selectOption("#course", INTRO);
+  await expect(page.locator("#thankyou")).toHaveText(
+    "Cutoffs changed since your last download (A: 78 to 77). Download again to update the file.");
+});
+
+test("#37 the review says a second download replaces the first", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await page.click("#reviewBtn");
+  await expect(page.locator("#rvReplaces")).toBeHidden();
+  await page.click("#download");
+  await typeCutoff(page, "A", 77);
+  await page.click("#reviewBtn");
+  await expect(page.locator("#rvReplaces")).toBeVisible();
+  await expect(page.locator("#rvReplaces")).toHaveText("This replaces your earlier download.");
 });
 
 test("E6: cutoffs and statuses survive a refresh when the same file is uploaded again", async ({ page }) => {

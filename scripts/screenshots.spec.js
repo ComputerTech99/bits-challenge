@@ -38,6 +38,22 @@ const STATES = {
     await page.waitForTimeout(700);
     await download(page);
   },
+  "changed-since-download": async page => {
+    await startGrading(page, DEMO, COURSE);
+    await typeCutoff(page, "A", 78);
+    await download(page);
+    await typeCutoff(page, "A", 77);
+    await page.waitForTimeout(700);
+  },
+  "dialog-redownload": async page => {
+    await startGrading(page, DEMO, COURSE);
+    await typeCutoff(page, "A", 78);
+    await download(page);
+    await typeCutoff(page, "A", 77);
+    await page.waitForTimeout(700);
+    await page.click("#reviewBtn");
+    await page.waitForTimeout(300);
+  },
   "reset-notice": async page => {
     await startGrading(page, DEMO, COURSE);
     await typeCutoff(page, "A", 78);

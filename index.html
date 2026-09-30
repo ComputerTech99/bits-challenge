@@ -330,7 +330,7 @@ a{color:var(--accent)}
 .setup.collapsed{flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 24px}
 .setup.collapsed .controls{display:block}
 .setup.collapsed .controls .field{flex-direction:row;align-items:center;gap:8px}
-.setup.collapsed #course{width:min(360px, 60vw)}
+.setup.collapsed #course{width:min(440px, 60vw)} /* fits "(Changed since download)" (#37) */
 .setup.collapsed #uploadError{flex-basis:100%}
 button.link{
   height:auto;
@@ -831,6 +831,7 @@ try{
   <p id="rvImpactNone" class="review-none" hidden>No student's grade differs from the default cutoffs.</p>
   <button type="button" class="link" id="rvImpactAll" hidden></button>
   <p id="rvBorderline" class="review-info"></p>
+  <p id="rvReplaces" class="review-info" hidden>This replaces your earlier download.</p>
   <div class="review-actions">
     <button type="button" class="secondary" id="reviewBack">Back to grading</button>
     <button type="button" id="download">Download grades (CSV)</button>
@@ -907,6 +908,7 @@ let cutoffs={...DEFAULT_CUTOFFS}; // the open course's cutoffs: the one source o
 let courseState=new Map(); // course name -> { cutoffs, undo, redo, downloaded } (downloaded: cutoffs at the last CSV download)
 let previousCounts=null;          // last announced counts (null = nothing to compare)
 let finalizeCount = 0;
+let completionText="";            // this course's completion message, from its last download
 
 // THE grading rule. Counts, chart, borderline list, search, review and export
 // all use it. `cuts` defaults to the open course's cutoffs; the review (E9)
@@ -955,12 +957,12 @@ function stateFor(name){
 function sameCutoffs(a,b){ return CUTOFF_GRADES.every(g=>a[g]===b[g]); }
 
 // E6: a course is Downloaded while its cutoffs match what was last downloaded,
-// In progress once anything differs from that (or from the defaults), and
-// Not started until then.
+// Changed since download once they differ from that (#37), In progress once
+// they differ from the defaults, and Not started until then.
 function courseStatus(name){
   const st=courseState.get(name);
   if(!st) return "Not started";
-  if(st.downloaded) return sameCutoffs(st.downloaded,st.cutoffs) ? "Downloaded" : "In progress";
+  if(st.downloaded) return sameCutoffs(st.downloaded,st.cutoffs) ? "Downloaded" : "Changed since download";
   return sameCutoffs(st.cutoffs,DEFAULT_CUTOFFS) ? "Not started" : "In progress";
 }
 
@@ -1005,6 +1007,7 @@ function resetGradingView(){
   // Timer, attempt count and messages belong to one course.
   resetTimer();
   finalizeCount=0;
+  completionText="";
   thankyou.innerText="";
   exportError.innerText="";
   updateEmptyState();
@@ -1388,8 +1391,23 @@ function render(){
   updateChangeCount();
   updateHistoryButtons();
   updateProgress();
+  updateDownloadMessage();
   saveProgress();
   updateFind(); // a found student's grade follows the cutoffs
+}
+
+// #37: once the cutoffs differ from the last download, the completion message
+// would be untrue, so it becomes a prompt to download again. Moving the
+// cutoffs back to the downloaded values brings the completion message back.
+function updateDownloadMessage(){
+  const st=courseState.get(course.value);
+  if(st && st.downloaded && !sameCutoffs(st.downloaded,cutoffs)){
+    const changes=CUTOFF_GRADES.filter(g=>st.downloaded[g]!==cutoffs[g])
+      .map(g=>`${g}: ${st.downloaded[g]} to ${cutoffs[g]}`);
+    thankyou.innerText=`Cutoffs changed since your last download (${changes.join(", ")}). Download again to update the file.`;
+  }else{
+    thankyou.innerText=completionText;
+  }
 }
 
 // ===== UNDO, REDO AND RESET (E5) =====
@@ -2025,6 +2043,7 @@ reviewBtn.onclick=()=>{
   rvBorderline.textContent=near
     ? `${near} ${near===1?"student is":"students are"} within ${N} ${N===1?"mark":"marks"} below a cutoff. You can still adjust the cutoffs before downloading.`
     : `No students are within ${N} ${N===1?"mark":"marks"} below a cutoff.`;
+  rvReplaces.hidden=!stateFor(course.value).downloaded; // #37
   reviewDialog.showModal();
   reviewHeading.focus();
 };
@@ -2101,15 +2120,16 @@ download.onclick=()=>{
   saveProgress();
 
   if(finalizeCount === 1){
-    thankyou.innerText =
+    completionText =
       `You completed grading in ${minT} min ${secT} sec in your first attempt.`;
   } else {
     const suffix = finalizeCount === 2 ? "second"
                   : finalizeCount === 3 ? "third"
                   : ordinal(finalizeCount);
-    thankyou.innerText =
+    completionText =
       `You took a total of ${minT} min ${secT} sec to complete the grading in your ${suffix} attempt.`;
   }
+  updateDownloadMessage();
 };
 </script>
 </body>
