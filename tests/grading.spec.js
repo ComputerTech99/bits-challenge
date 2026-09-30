@@ -661,7 +661,8 @@ test("setup: the sample file link points at the demo file", async ({ page, reque
 test("setup: collapses to a summary once a course is open, and Edit expands it", async ({ page }) => {
   await startGrading(page, "demo_marks.xlsx", "Introduction to Programming");
   // #33: the instructor and course live in the app bar only.
-  await expect(page.locator("#setupSummaryText")).toHaveText("demo_marks.xlsx · 148 students · 3 courses");
+  // E6: the course count is part of the progress ("0 of 3 courses downloaded").
+  await expect(page.locator("#setupSummaryText")).toHaveText("demo_marks.xlsx · 148 students · 0 of 3 courses downloaded");
   await expect(page.locator("#instructor")).toBeHidden();
   await expect(page.locator("#course")).toBeVisible(); // switching course stays one click away
   await page.click("#editSetup");
@@ -1142,15 +1143,13 @@ test("#31 each course keeps its own cutoffs when switching course", async ({ pag
 });
 
 test("#31 a new upload clears every course's cutoffs", async ({ page }) => {
-  await startGrading(page, "demo_marks.xlsx", INTRO);
+  // Stage 2B (E6): uploading the *same* file again restores its saved cutoffs
+  // (with a notice), so this uses a different file with the same course names.
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
   await typeCutoff(page, "A", 78);
-  // Picking the identical file again fires no "change" (see "Reviewed, not
-  // changed"), so load another file first, then the demo file again.
-  await upload(page, "valid_basic.xlsx");
-  await expect(page.locator("#course option")).toHaveCount(3);
-  await upload(page, "demo_marks.xlsx");
-  await page.waitForFunction(c => [...document.querySelectorAll("#course option")].some(o => o.value === c), INTRO);
-  await page.selectOption("#course", INTRO);
+  await upload(page, "clustered_marks.xlsx");
+  await page.waitForFunction(() => document.querySelectorAll("#course option").length === 3);
+  await page.selectOption("#course", "CS F211");
   await expect(cutoffInput(page, "A")).toHaveValue("80");
 });
 
@@ -1425,6 +1424,115 @@ test("#35 Reset to defaults uses no native confirm() anywhere", async ({ page })
   await expect(cutoffInput(page, "A")).toHaveValue("80"); // reset happened
   await expect(page.locator("#resetNotice")).toBeVisible();
   expect(dialogs).toEqual([]);
+});
+
+// ===== E6: per-course progress and autosave =====
+
+async function optionLabel(page, value) {
+  return page.locator(`#course option[value="${value}"]`).textContent();
+}
+
+test("E6: each course shows Not started, In progress or Downloaded", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  expect(await optionLabel(page, INTRO)).toBe(`${INTRO} · Not started`);
+  expect(await optionLabel(page, "Linear Algebra")).toBe("Linear Algebra · Not started");
+  await expect(page.locator("#setupSummaryText")).toHaveText("demo_marks.xlsx · 148 students · 0 of 3 courses downloaded");
+  await typeCutoff(page, "A", 78);
+  expect(await optionLabel(page, INTRO)).toBe(`${INTRO} · In progress`);
+  await download(page);
+  expect(await optionLabel(page, INTRO)).toBe(`${INTRO} · Downloaded`);
+  await expect(page.locator("#setupSummaryText")).toHaveText("demo_marks.xlsx · 148 students · 1 of 3 courses downloaded");
+  // A change after downloading means the file no longer matches: in progress again.
+  await typeCutoff(page, "B", 62);
+  expect(await optionLabel(page, INTRO)).toBe(`${INTRO} · In progress`);
+  await expect(page.locator("#setupSummaryText")).toContainText("0 of 3 courses downloaded");
+  await page.click("#undoBtn"); // back to exactly what was downloaded
+  expect(await optionLabel(page, INTRO)).toBe(`${INTRO} · Downloaded`);
+});
+
+test("E6: cutoffs and statuses survive a refresh when the same file is uploaded again", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await typeCutoff(page, "A", 78);
+  await download(page);
+  await page.selectOption("#course", "Linear Algebra");
+  await typeCutoff(page, "B", 62);
+  await page.reload();
+  await expect(page.locator("#restoreNotice")).toBeHidden();
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  const notice = page.locator("#restoreNotice");
+  await expect(notice).toBeVisible();
+  await expect(notice).toContainText("Restored your cutoffs from earlier.");
+  await expect(cutoffInput(page, "A")).toHaveValue("78");
+  expect(await optionLabel(page, INTRO)).toBe(`${INTRO} · Downloaded`);
+  expect(await optionLabel(page, "Linear Algebra")).toBe("Linear Algebra · In progress");
+  await page.selectOption("#course", "Linear Algebra");
+  await expect(cutoffInput(page, "B")).toHaveValue("62");
+});
+
+test("E6: Start over forgets the saved cutoffs and returns every course to defaults", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await typeCutoff(page, "A", 78);
+  await page.reload();
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await expect(cutoffInput(page, "A")).toHaveValue("78");
+  await page.locator("#restoreNotice").getByRole("button", { name: "Start over" }).click();
+  await expect(cutoffInput(page, "A")).toHaveValue("80");
+  await expect(page.locator("#restoreNotice")).toBeHidden();
+  expect(await optionLabel(page, INTRO)).toBe(`${INTRO} · Not started`);
+  await page.reload();
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await expect(page.locator("#restoreNotice")).toBeHidden();
+  await expect(cutoffInput(page, "A")).toHaveValue("80");
+});
+
+test("E6: a different file does not pick up another file's saved cutoffs", async ({ page }) => {
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
+  await typeCutoff(page, "A", 78);
+  await page.reload();
+  // Same course list, different file: not the same marks, so nothing is restored.
+  await startGrading(page, "clustered_marks.xlsx", "CS F211");
+  await expect(page.locator("#restoreNotice")).toBeHidden();
+  await expect(cutoffInput(page, "A")).toHaveValue("80");
+});
+
+test("E6: storage holds only cutoffs and statuses, never marks or BITS IDs", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await typeCutoff(page, "A", 78);
+  await download(page);
+  const stored = await page.evaluate(() => Object.keys(localStorage).map(k => [k, localStorage.getItem(k)]));
+  const saved = stored.filter(([k]) => k.startsWith("gradingConsole:v1:file:"));
+  expect(saved).toHaveLength(1);
+  const [key, json] = saved[0];
+  expect(key).toContain("demo_marks.xlsx");
+  expect(Object.keys(JSON.parse(json)).sort()).toEqual(["cutoffs", "downloaded"]);
+  const everything = stored.flat().join("\n");
+  const ids = XLSX.utils.sheet_to_json(XLSX.readFile(fixture("demo_marks.xlsx")).Sheets.Marks).map(r => String(r["BITS ID"]));
+  for (const id of ids) expect.soft(everything.includes(id), `BITS ID ${id} stored`).toBe(false);
+  // Values are only course -> { grade: cutoff } maps.
+  const grades = ["A", "A-", "B", "B-", "C", "C-", "D"];
+  for (const perCourse of Object.values(JSON.parse(json)))
+    for (const cut of Object.values(perCourse)) expect(Object.keys(cut)).toEqual(grades);
+});
+
+test("E6: an untouched file stores nothing", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  const keys = await page.evaluate(() => Object.keys(localStorage).filter(k => k.includes(":file:")));
+  expect(keys).toEqual([]);
+});
+
+test("E6: everything still works when storage is blocked", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "localStorage", { get() { throw new DOMException("blocked", "SecurityError"); } });
+  });
+  const errors = [];
+  page.on("pageerror", e => errors.push(e.message));
+  await page.goto("/");
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await typeCutoff(page, "A", 78);
+  expect(await optionLabel(page, INTRO)).toBe(`${INTRO} · In progress`);
+  const { text } = await download(page);
+  expect(text).toContain("Introduction to Programming");
+  expect(errors).toEqual([]);
 });
 
 test.describe("#32 touch at 390px", () => {

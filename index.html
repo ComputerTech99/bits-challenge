@@ -96,7 +96,7 @@ h2{font-size:16px}
 .panel-head{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:8px 16px;margin-bottom:12px}
 .panel-head .help{margin-top:4px}
 .toolbar{display:flex;flex-wrap:wrap;gap:8px}
-.reset-notice{
+.inline-notice{
   display:flex;
   align-items:center;
   gap:8px;
@@ -106,7 +106,8 @@ h2{font-size:16px}
   border-radius:var(--radius-control);
   background:var(--canvas);
 }
-.reset-notice[hidden]{display:none}
+.inline-notice[hidden]{display:none}
+.setup .inline-notice{margin:0;flex-basis:100%}
 .workspace{
   display:grid;
   grid-template-columns:minmax(0,1fr) 320px;
@@ -490,6 +491,8 @@ body.grading .empty-state{display:none}
   </div>
   <div id="courseError" class="error" role="alert"></div>
   <div id="uploadError" class="error" role="alert"></div>
+  <p class="inline-notice" id="restoreNotice" role="status" hidden><span>Restored your cutoffs from earlier.</span>
+    <button type="button" class="link" id="startOver">Start over</button></p>
 </section>
 
 
@@ -511,7 +514,7 @@ body.grading .empty-state{display:none}
         <button type="button" class="secondary" id="resetAll" disabled>Reset to defaults</button>
       </div>
     </div>
-    <p class="reset-notice" id="resetNotice" role="status" hidden><span>Cutoffs reset to defaults.</span>
+    <p class="inline-notice" id="resetNotice" role="status" hidden><span>Cutoffs reset to defaults.</span>
       <button type="button" class="link" id="resetUndo">Undo</button></p>
     <div class="chart" id="chartBox">
       <svg id="hist" tabindex="0" role="img"
@@ -642,7 +645,7 @@ let data=[];
 let cutoffs={...DEFAULT_CUTOFFS}; // the open course's cutoffs: the one source of truth for grading
 // Per-course state for the life of the loaded file: switching course and back
 // keeps that course's cutoffs. A new upload starts a fresh map.
-let courseState=new Map(); // course name -> { cutoffs, undo, redo }
+let courseState=new Map(); // course name -> { cutoffs, undo, redo, downloaded } (downloaded: cutoffs at the last CSV download)
 let previousCounts=null;          // last announced counts (null = nothing to compare)
 let finalizeCount = 0;
 
@@ -686,6 +689,27 @@ function courseRows(){ return data.filter(d=>d.Course===course.value); }
 function stateFor(name){
   if(!courseState.has(name)) courseState.set(name,{cutoffs:{...DEFAULT_CUTOFFS},undo:[],redo:[]});
   return courseState.get(name);
+}
+
+function sameCutoffs(a,b){ return CUTOFF_GRADES.every(g=>a[g]===b[g]); }
+
+// E6: a course is Downloaded while its cutoffs match what was last downloaded,
+// In progress once anything differs from that (or from the defaults), and
+// Not started until then.
+function courseStatus(name){
+  const st=courseState.get(name);
+  if(!st) return "Not started";
+  if(st.downloaded) return sameCutoffs(st.downloaded,st.cutoffs) ? "Downloaded" : "In progress";
+  return sameCutoffs(st.cutoffs,DEFAULT_CUTOFFS) ? "Not started" : "In progress";
+}
+
+// Status in each course option and "N of M courses downloaded" in the setup summary.
+function updateProgress(){
+  const options=[...course.options].slice(1); // skip the placeholder
+  options.forEach(o=>{ o.textContent=`${o.value} · ${courseStatus(o.value)}`; });
+  const done=options.filter(o=>courseStatus(o.value)==="Downloaded").length, n=options.length;
+  setupSummaryText.textContent=
+    `${loadedFileName} · ${data.length} students · ${done} of ${n} ${n===1?"course":"courses"} downloaded`;
 }
 
 // What the empty analysis area tells the user to do next.
@@ -809,6 +833,8 @@ function loadFile(f){
   data=[];
   loadedFileName="";
   courseState=new Map();
+  saveKey=null;
+  restoreNotice.hidden=true;
   course.options.length=1; // keep only the placeholder option
   resetGradingView();
   uploadError.innerText="";
@@ -837,6 +863,9 @@ function loadFile(f){
     courses.forEach(c=>{
       course.add(new Option(c,c));
     });
+    saveKey=progressKey(f.name,courses);
+    restoreNotice.hidden=!restoreProgress(courses);
+    updateProgress();
     updateEmptyState();
     showFileStatus(f.name,
       `${data.length} students in ${courses.length} ${courses.length===1?"course":"courses"}. Choose or drop another file to replace it.`);
@@ -858,8 +887,7 @@ dropzone.addEventListener("drop",e=>{
 // Once a course is open the setup collapses to one line; Edit expands it again.
 // It describes the file; the instructor and course are in the app bar (#33).
 function collapseSetup(){
-  const n=new Set(data.map(d=>d.Course)).size;
-  setupSummaryText.textContent=`${loadedFileName} · ${data.length} students · ${n} ${n===1?"course":"courses"}`;
+  updateProgress();
   setup.classList.add("collapsed");
 }
 editSetup.onclick=()=>{
@@ -1088,6 +1116,8 @@ function render(){
   computeStats();
   updateChangeCount();
   updateHistoryButtons();
+  updateProgress();
+  saveProgress();
 }
 
 // ===== UNDO, REDO AND RESET (E5) =====
@@ -1106,7 +1136,7 @@ function userSetCutoff(g,value,burstKey=null){
 }
 
 function recordChange(before,burstKey=null){
-  if(CUTOFF_GRADES.every(g=>before[g]===cutoffs[g])) return; // nothing moved
+  if(sameCutoffs(before,cutoffs)) return; // nothing moved
   const st=stateFor(course.value), now=Date.now();
   const sameBurst=burstKey!==null && burst.key===burstKey && now-burst.at<BURST_MS;
   if(!sameBurst) st.undo.push(before); // mid-burst, the step already holds the start
@@ -1514,6 +1544,82 @@ function ordinal(n){
 
 updateEmptyState();
 
+// ===== AUTOSAVE (E6) =====
+// Only each course's cutoffs and download status are saved (and, from E8, the
+// theme): never marks or BITS IDs. An entry is keyed by the file name plus a
+// fingerprint of its course list, so it comes back only for the same file.
+// Every access is guarded: with storage blocked (private browsing, policy) the
+// app works exactly the same, it just doesn't remember.
+const store={
+  get(key){ try{ return JSON.parse(localStorage.getItem(key)); }catch{ return null; } },
+  set(key,value){ try{ localStorage.setItem(key,JSON.stringify(value)); }catch{ /* not saved */ } },
+  remove(key){ try{ localStorage.removeItem(key); }catch{ /* nothing to remove */ } },
+};
+let saveKey=null; // storage key for the loaded file
+
+// FNV-1a: a short, stable fingerprint of a string.
+function fingerprint(text){
+  let h=0x811c9dc5;
+  for(const ch of text){ h^=ch.codePointAt(0); h=Math.imul(h,0x01000193)>>>0; }
+  return h.toString(16).padStart(8,"0");
+}
+function progressKey(fileName,courses){
+  return `gradingConsole:v1:file:${fileName}:${fingerprint([...courses].sort().join("\n"))}`;
+}
+
+// Saves the courses that have changed or been downloaded; an untouched file stores nothing.
+function saveProgress(){
+  if(!saveKey) return;
+  const saved={cutoffs:{},downloaded:{}};
+  courseState.forEach((st,name)=>{
+    if(!sameCutoffs(st.cutoffs,DEFAULT_CUTOFFS)) saved.cutoffs[name]={...st.cutoffs};
+    if(st.downloaded) saved.downloaded[name]={...st.downloaded};
+  });
+  if(Object.keys(saved.cutoffs).length || Object.keys(saved.downloaded).length) store.set(saveKey,saved);
+  else store.remove(saveKey);
+}
+
+// Saved data is only trusted if it is a set the editor itself could produce:
+// whole numbers, strictly falling from A (at most 100) to D (at least 1).
+function validCutoffs(c){
+  if(!c || typeof c!=="object") return false;
+  let above=101;
+  return CUTOFF_GRADES.every(g=>{
+    const ok=Number.isInteger(c[g]) && c[g]>=1 && c[g]<above;
+    above=c[g];
+    return ok;
+  });
+}
+
+// Loads saved state for this file's courses. Returns whether anything came back.
+function restoreProgress(courses){
+  const saved=store.get(saveKey);
+  if(!saved || typeof saved!=="object") return false;
+  let restored=false;
+  courses.forEach(name=>{
+    const c=saved.cutoffs && saved.cutoffs[name], d=saved.downloaded && saved.downloaded[name];
+    if(validCutoffs(c)){ Object.assign(stateFor(name).cutoffs,c); restored=true; }
+    if(validCutoffs(d)){ stateFor(name).downloaded={...d}; restored=true; }
+  });
+  return restored;
+}
+
+// Forget the saved state: every course back to defaults, with fresh history.
+startOver.onclick=()=>{
+  store.remove(saveKey);
+  courseState=new Map();
+  restoreNotice.hidden=true;
+  if(document.body.classList.contains("grading")){
+    cutoffs=stateFor(course.value).cutoffs;
+    resetNotice.hidden=true;
+    burst={key:null,at:0};
+    render();
+  }else{
+    updateProgress();
+  }
+  course.focus(); // the button hid itself
+};
+
 // ===== REVIEW BEFORE EXPORT (E4) =====
 function changedCutoffs(){
   return CUTOFF_GRADES.filter(g=>cutoffs[g]!==DEFAULT_CUTOFFS[g])
@@ -1576,6 +1682,9 @@ download.onclick=()=>{
   const url=a.href;
   setTimeout(()=>URL.revokeObjectURL(url),40000);
   reviewDialog.close();
+  stateFor(course.value).downloaded={...cutoffs}; // E6: this course is done (for these cutoffs)
+  updateProgress();
+  saveProgress();
 
   if(finalizeCount === 1){
     thankyou.innerText =

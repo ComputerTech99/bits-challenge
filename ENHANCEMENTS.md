@@ -10,6 +10,7 @@ the end of a trimester:
 | E3 | "Which students does moving a cutoff by one mark actually affect?" | Borderline students |
 | E4 | "Am I sure about what I'm about to submit?" | Review before export |
 | E5 | "What if I drag the wrong line?" | Undo, redo and reset where you need them |
+| E6 | "Which of my courses are done, and will a refresh lose my work?" | Per-course progress and autosave |
 
 All grade calculations go through one function, `gradeFor(mark)`. The counts, the
 distribution table, the chart, the borderline list and the CSV export can't
@@ -306,6 +307,43 @@ produce.
 - Stacks are per course.
 - The bottom bar has only "Review grades".
 
+## E6: Per-course progress and autosave
+
+**Problem.** A marks file usually holds several courses. The instructor grades them one by one
+and has to remember which ones have been downloaded. A refresh, a closed tab or a crashed
+browser threw away every cutoff decision.
+
+**Solution.**
+- **Status per course.** Each course option shows "Not started", "In progress" or "Downloaded"
+  (for example "Linear Algebra · In progress"). The setup summary reads "1 of 3 courses
+  downloaded". A course is Downloaded while its cutoffs match the ones last downloaded. Change
+  them afterwards and it goes back to In progress, because the file you have no longer matches.
+  Undo back to the downloaded cutoffs and it shows Downloaded again.
+- **Autosave.** Each course's cutoffs and download status are saved to `localStorage` after
+  every change and download. The key is the file name plus an FNV-1a fingerprint of the sorted
+  course names.
+- **Restore.** When the same file is uploaded again, the saved state comes back with a notice:
+  "Restored your cutoffs from earlier. Start over". "Start over" forgets the saved entry and
+  returns every course to defaults.
+- **Privacy.** Marks and BITS IDs are never stored. Only the courses you've touched are saved,
+  so an untouched file stores nothing. Restored cutoffs are used only if they form a set the
+  editor could have produced.
+- **Resilience.** Every storage call is wrapped in try/catch. With storage blocked the app works
+  the same and simply doesn't remember. The README says what is stored.
+
+**Why this design.** Autosave with a restore notice keeps the instructor in control without
+asking anything up front. The status is derived from the cutoffs rather than tracked as a flag,
+so it can never contradict what's on screen.
+
+**How tested.** `E6` tests:
+- Statuses and the "N of 3" summary through change, download, change and undo.
+- A refresh and re-upload restores both courses' cutoffs and statuses, with the notice.
+- "Start over" clears the entry, and a later reload restores nothing.
+- A different file with the same course names doesn't pick up the saved state.
+- The stored JSON contains no BITS ID from the file and only grade-to-cutoff maps; an untouched
+  file stores nothing.
+- With a `localStorage` getter that throws, grading and download still work with no page errors.
+
 ## Visual redesign
 
 The four enhancements sit on a new foundation built to the CLAUDE.md design
@@ -409,6 +447,8 @@ rewritten to check the same guarantee through the new UI. None was deleted.
 | #18 (ordinals) | E4 | 23 finalizes through the dialog. |
 | #27b (blocked export clears on re-upload) | E4 | The blocked attempt clicks "Review grades". |
 | setup: collapses to a summary (summary text) | Stage 2B, #33: the summary no longer repeats the instructor, who is shown in the app bar. | The summary reads `demo_marks.xlsx · 148 students · 3 courses`. Collapse, Edit and focus are checked as before. |
+| setup: collapses to a summary (summary text), again | E6 adds progress to the summary. | `demo_marks.xlsx · 148 students · 0 of 3 courses downloaded`. The course count is part of the progress. |
+| #31b (a new upload clears every course's cutoffs) | E6 restores a file's saved cutoffs when the *same* file is uploaded again, which this test used to do. | The same in-memory guarantee through a different file with the same course names (`valid_basic` then `clustered_marks`). Restoring the same file is covered by the E6 tests. |
 | #19 ×2 (reset asks once / dismiss keeps cutoffs) | E5 moved the button to the chart panel header as "Reset to defaults" (`#resetAll`). Then #35 removed the `confirm()`. | The guarantee that a reset never costs you your cutoffs, now through undo: (a) one click resets every cutoff and no dialog appears; (b) the notice's Undo restores the cutoffs. |
 | #22 (reset inert before a course) | E5: the button is inside the chart panel, which is hidden until a course is open. | Hidden and disabled on a fresh page and after an upload. A dispatched click causes no error and no dialog. |
 | E1: the action bar counts changes | E5: the reset button left the action bar. | Same counts. The enabled/disabled check now uses `#resetAll`. |

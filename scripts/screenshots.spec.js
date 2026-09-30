@@ -41,6 +41,15 @@ const STATES = {
     await page.waitForTimeout(700);
     await page.click("#resetAll");
   },
+  restored: async page => {
+    await startGrading(page, DEMO, COURSE);
+    await typeCutoff(page, "A", 78);
+    await download(page);
+    await page.reload();
+    await page.evaluate(() => document.fonts.ready);
+    await startGrading(page, DEMO, COURSE);
+    await page.waitForTimeout(700);
+  },
   "cutoff-moved": async page => {
     await startGrading(page, DEMO, COURSE);
     await typeCutoff(page, "A", 78);
@@ -61,6 +70,7 @@ for (const width of WIDTHS) {
       // really end up, instead of being stitched mid-page by fullPage capture.
       const height = await page.evaluate(() => document.documentElement.scrollHeight);
       await page.setViewportSize({ width, height: Math.max(900, height) });
+      await page.evaluate(() => scrollTo(0, 0)); // a reload can restore a scrolled position
       await page.screenshot({ path: path.join(OUT, `${name}-${width}.png`) });
     });
   }

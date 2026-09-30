@@ -25,6 +25,14 @@ upload area.
   cutoffs changed from the defaults, and anyone still on a boundary before the
   CSV downloads. The CSV format is identical to Stage 1.
 
+## What it stores on your computer
+To survive a refresh, the app saves each course's **cutoffs and download status**
+in your browser's `localStorage`, keyed by the file name and a fingerprint of the
+course names. It never stores **marks or BITS IDs**: those stay only in the page's memory
+and are gone when you close it. Nothing is sent anywhere. Upload the same file again
+and your cutoffs come back, with a "Start over" option. If the browser blocks storage
+(for example in some private windows), the app works the same but doesn't remember.
+
 Details: [ENHANCEMENTS.md](ENHANCEMENTS.md) (Stage 2),
 [BUG_FIX_LOG.md](BUG_FIX_LOG.md) (Stage 1, bugs #1–#30),
 [AI_USAGE.md](AI_USAGE.md) (how AI tools were used).
