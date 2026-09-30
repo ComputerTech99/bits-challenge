@@ -2233,3 +2233,15 @@ test("#41 chip dots stay round on the wider chips (A-, B-, C-)", async ({ page }
   expect(dots.length).toBe(16);
   for (const d of dots) expect(d, d.g).toEqual({ g: d.g, w: 8, h: 8 });
 });
+
+for (const width of [1440, 1024, 390]) {
+  test(`#42 grade ranges never wrap in the distribution table at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await startGrading(page, "demo_marks.xlsx", INTRO);
+    const cells = await page.locator("#gradeSummary td:nth-child(2)").evaluateAll(tds => tds.map(td => {
+      const r = document.createRange(); r.selectNodeContents(td);
+      return { text: td.textContent, lines: r.getClientRects().length, ws: getComputedStyle(td).whiteSpace };
+    }));
+    for (const c of cells) expect(c, c.text).toEqual({ text: c.text, lines: 1, ws: "nowrap" });
+  });
+}
