@@ -240,7 +240,13 @@ button.text-btn:hover:not(:disabled){background:var(--canvas)}
 /* Find a student: a compact search field with its icon inside. */
 .search{position:relative;display:flex}
 .search svg{position:absolute;left:12px;top:12px;width:16px;height:16px;fill:none;stroke:var(--ink-muted);stroke-width:2;stroke-linecap:round;pointer-events:none}
-.search input{width:200px;padding-left:36px}
+.search input{width:200px;padding-left:36px;padding-right:36px}
+/* Our own clear button replaces the browser's blue one (#46). */
+.search input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;display:none}
+.search button.search-clear{position:absolute;right:4px;top:4px;width:32px;height:32px;border:none;border-radius:6px}
+.search button.search-clear:hover{background:var(--canvas)}
+.search button.search-clear[hidden]{display:none}
+.search .search-clear svg{position:static;stroke:currentColor}
 .find-results{display:flex;flex-wrap:wrap;align-items:center;gap:4px 16px;min-width:0;margin-bottom:12px}
 .find-results:empty{display:none}
 .find-results ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:4px 32px}
@@ -765,6 +771,9 @@ try{
         <div class="search">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
           <input type="search" id="findId" aria-label="Find a student" placeholder="Find by BITS ID" autocomplete="off" spellcheck="false">
+          <button type="button" class="icon-btn search-clear" id="findClear" aria-label="Clear search" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          </button>
         </div>
       </div>
     </div>
@@ -1853,6 +1862,7 @@ function applyHighlight(){
 const FIND_SHOWN=5, FIND_MIN=4;
 function updateFind(){
   const q=findId.value.trim().toLowerCase();
+  findClear.hidden=!findId.value;
   findResults.innerHTML="";
   searchMarks=[];
   if(q && document.body.classList.contains("grading")){
@@ -1881,6 +1891,11 @@ function updateFind(){
   applyHighlight();
 }
 findId.addEventListener("input",updateFind);
+findClear.onclick=()=>{
+  findId.value="";
+  updateFind();
+  findId.focus();
+};
 
 // Screen-reader summary of the distribution.
 function updateChartSummary(rows,counts){

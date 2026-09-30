@@ -2383,3 +2383,33 @@ test.describe("#45 focus on a narrow bar at 390px", () => {
     await expect(page.locator("#hist .focus-caret")).toHaveCount(0);
   });
 });
+
+test("#46 the search has its own quiet clear button, not the browser's blue one", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  const clear = page.getByRole("button", { name: "Clear search" });
+  await expect(clear).toBeHidden();
+  await page.fill("#findId", "20247096");
+  await expect(clear).toBeVisible();
+  await expect(page.locator("#hist")).toHaveClass(/has-highlight/);
+  const [muted, ink] = await page.evaluate(() => {
+    const s = getComputedStyle(document.documentElement);
+    const probe = document.createElement("span"); document.body.append(probe);
+    const rgb = v => { probe.style.color = `var(${v})`; return getComputedStyle(probe).color; };
+    const out = [rgb("--ink-muted"), rgb("--ink")]; probe.remove(); return out;
+  });
+  await expect(clear).toHaveCSS("color", muted);
+  await clear.hover();
+  await expect(clear).toHaveCSS("color", ink);
+  await expect(clear.locator("svg")).toHaveCSS("stroke", ink); // the icon follows the hover colour
+  await clear.click();
+  await expect(page.locator("#findId")).toHaveValue("");
+  await expect(page.locator("#findId")).toBeFocused();
+  await expect(clear).toBeHidden();
+  await expect(page.locator("#findResults")).toBeEmpty();
+  await expect(page.locator("#hist")).not.toHaveClass(/has-highlight/);
+  // getComputedStyle can't read the native ::-webkit-search-cancel-button, so
+  // check that the rule hiding it is in the page's styles.
+  const hidesNative = await page.evaluate(() => [...document.styleSheets].filter(sh => !sh.href).some(sh => [...sh.cssRules].some(r =>
+    r.selectorText?.includes("::-webkit-search-cancel-button") && r.style.display === "none")));
+  expect(hidesNative).toBe(true);
+});
