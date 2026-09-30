@@ -169,3 +169,25 @@ I approved the plan before implementation. [To complete: my review of the Stage 
 
 **Human review**
 I approved the plan before implementation. [To complete: my review of the Stage 2C commits.]
+
+## 2026-09-30: Stage 2D (chart colour), Claude Code (Claude Opus 5.5)
+
+**What I asked for:** The "Aurora" grade palette on the histogram bars (violet A to green E, ordered in OKLCH) with a 150ms recolour; neutral cutoff lines with the accent only on the active handle; focus shown by dimming the other bars to 25% and outlining the focused one, never by recolouring; a grade-coloured dot on chips and grade-coloured share bars. One `style:` commit per item, tests for contrast, palette order and the focus state, and screenshots at 1440 and 390 in light and dark.
+
+**What the AI did**
+- Planned in plan mode; I approved the plan, then four `style:` commits.
+- Used the exact CLAUDE.md token values. One `[data-grade]` → `--grade` map feeds the bars, share bars and chip dots, so the chart and its legend can't disagree.
+- Interpreted "focused" handle as "its cutoff is being edited", because the handles are `aria-hidden` and keyboard users move cutoffs through the editor inputs.
+- Put all three focus sources (chart hover/keyboard, borderline hover, search) through the existing `applyHighlight()` instead of a separate `.active` recolour.
+- Tests: 149 → 162. New tests cover per-grade fills, live recolour, the 150ms/reduced-motion transition, OKLCH hue order with no red/orange/amber hues (light and dark), neutral lines and the lit handle, dimming for hover/search/borderline (light and dark), and chip dots and share bars. Rewrites are listed in ENHANCEMENTS.md; none was deleted.
+- Screenshots in `docs/screenshots/colour/`.
+
+**Where the AI got things wrong, and how that was caught**
+- **Obsolete assertion.** Item 1 broke the Stage 2C check that a focused bar was ≥ 2:1 from "the neutral bar", because no bar is neutral any more. It was pointed at the `--bar` token for one commit, then replaced by the dimming tests in item 3.
+- **Flaky hover test.** Hovering a bar during its grow-in animation failed about 1 time in 3 ("outside of the viewport"). Repeating the test 15 times exposed this; it now hovers the bar's full-height hit column, which is what a real pointer lands on.
+- **A script slip.** A replacement aborted because one token line was a substring of its indented copy; the assertion in the edit script caught it before anything was written.
+
+**Open point for me:** at 390px a bar is ~3px wide, so the 1.5px ink outline covers most of a focused bar's fill; in dark it reads as a near-white bar.
+
+**Human review**
+I approved the plan before implementation. [To complete: my review of the Stage 2D commits.]
