@@ -1765,6 +1765,8 @@ function layoutPills(){
     const off=kept.some(k=>touch(b,k));
     b.h.classList.toggle("label-off",off);
     if(!off) kept.push(b);
+    // No pill, no stub: a hidden label's line starts at the top of the plot (#52).
+    b.h.querySelector(".cutoff-line").setAttribute("y1",off ? chart.m.top : chart.m.top-6);
     const knob=b.h.querySelector(".cutoff-knob");
     knob.setAttribute("x",b.left); knob.setAttribute("y",top); knob.setAttribute("width",b.w);
     b.label.setAttribute("x",b.left+b.w/2); b.label.setAttribute("y",top+PILL_H/2+4);

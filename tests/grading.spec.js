@@ -2397,6 +2397,25 @@ test.describe("#44 colliding labels at 390px", () => {
   });
 });
 
+test.describe("#52 a hidden label leaves no line stub at 390px", () => {
+  test.use({ viewport: { width: 390, height: 900 } });
+
+  test("#52 a hidden label's line starts at the plot's top; a shown one reaches its pill", async ({ page }) => {
+    await startGrading(page, "demo_marks.xlsx", INTRO);
+    const lineTop = g => page.locator(`.cutoff-handle[data-grade="${g}"] .cutoff-line`).evaluate(l => l.getBoundingClientRect().top);
+    await typeCutoff(page, "A-", 79); // A's label hides (#44)
+    await expect(page.locator('.cutoff-handle[data-grade="A"]')).toHaveClass(/label-off/);
+    const { plotTop } = await pillLayout(page);
+    await expect.poll(async () => Math.abs(await lineTop("A") - plotTop)).toBeLessThanOrEqual(0.5);
+    await expect.poll(() => lineTop("A-")).toBeLessThan(plotTop - 2);
+
+    // Hovering A brings its pill back, and its line reaches up to it again.
+    const p = await handlePoint(page, "A");
+    await page.mouse.move(p.x + 11, p.y);
+    await expect.poll(() => lineTop("A")).toBeLessThan(plotTop - 2);
+  });
+});
+
 test.describe("#45 focus on a narrow bar at 390px", () => {
   test.use({ viewport: { width: 390, height: 900 }, colorScheme: "dark" });
 
