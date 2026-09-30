@@ -1037,26 +1037,88 @@ test("Stage 2C: each distribution row has a share bar scaled to the largest grad
   }
 });
 
-// Stage 2C: every bar is the same neutral tone over either the bare surface or
-// the faint alternate band shade. It must stand out from both by at least 3:1
-// (WCAG 1.4.11, non-text contrast). Rewritten from one ratio per grade colour.
+// Stage 2D: every bar is in its grade's colour, over either the bare surface
+// or the faint alternate band shade. Each colour must stand out from both by
+// at least 3:1 (WCAG 1.4.11, non-text contrast). Rewritten from the Stage 2C
+// version, which checked one neutral tone.
 async function barBandContrasts(page) {
-  const c = await page.evaluate(() => {
-    const fill = sel => getComputedStyle(document.querySelector(sel)).fill;
-    return { bar: fill("#hist rect.bar"), surface: getComputedStyle(document.querySelector(".panel")).backgroundColor,
-      bands: [...document.querySelectorAll("#hist .bands rect")].map(r => getComputedStyle(r).fill).filter(f => f !== "none") };
-  });
+  const c = await page.evaluate(() => ({
+    bars: [...new Set([...document.querySelectorAll("#hist rect.bar")].map(b => getComputedStyle(b).fill))],
+    surface: getComputedStyle(document.querySelector(".panel")).backgroundColor,
+    bands: [...document.querySelectorAll("#hist .bands rect")].map(r => getComputedStyle(r).fill).filter(f => f !== "none") }));
   expect(c.bands.length).toBeGreaterThan(0); // some bands are shaded
-  return [contrast(c.bar, c.surface), ...c.bands.map(b => contrast(c.bar, b))];
+  return c.bars.flatMap(bar => [contrast(bar, c.surface), ...c.bands.map(b => contrast(bar, b))]);
+}
+
+// The eight grade colours as the page resolves them (--g-A … --g-E).
+const GRADE_TOKENS = { A: "--g-A", "A-": "--g-Am", B: "--g-B", "B-": "--g-Bm", C: "--g-C", "C-": "--g-Cm", D: "--g-D", E: "--g-E" };
+async function gradeColours(page) {
+  return page.evaluate(tokens => Object.fromEntries(Object.entries(tokens).map(([g, t]) => {
+    const probe = document.createElement("span");
+    probe.style.color = `var(${t})`;
+    document.body.append(probe);
+    const c = getComputedStyle(probe).color;
+    probe.remove();
+    return [g, c];
+  })), GRADE_TOKENS);
+}
+
+// sRGB "rgb(r, g, b)" → OKLCH hue in degrees (Björn Ottosson's OKLab).
+function oklchHue(rgb) {
+  const [r, g, b] = rgb.match(/\d+/g).slice(0, 3).map(v => {
+    const c = Number(v) / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  const A = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s;
+  const B = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s;
+  return (Math.atan2(B, A) * 180 / Math.PI + 360) % 360;
 }
 
 test("a11y: every bar has at least 3:1 contrast against the surface and the band shade", async ({ page }) => {
   await startGrading(page, "demo_marks.xlsx", INTRO);
   for (const r of await barBandContrasts(page)) expect.soft(r).toBeGreaterThanOrEqual(3);
-  // One neutral tone for every grade: no colour per grade.
-  const fills = await page.locator("#hist rect.bar").evaluateAll(bs => [...new Set(bs.map(b => getComputedStyle(b).fill))]);
-  expect(fills).toHaveLength(1);
 });
+
+test("Stage 2D: each bar is filled with its grade's colour, one colour per grade", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  const colours = await gradeColours(page);
+  expect(new Set(Object.values(colours)).size).toBe(8);
+  const bars = await page.locator("#hist rect.bar").evaluateAll(bs => bs.map(b => ({ g: b.dataset.grade, fill: getComputedStyle(b).fill })));
+  expect(new Set(bars.map(b => b.g)).size).toBe(8); // the demo course uses every grade
+  for (const b of bars) expect.soft(b.fill, b.g).toBe(colours[b.g]);
+});
+
+test("Stage 2D: a bar recolours as soon as a cutoff moves past it", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  const colours = await gradeColours(page);
+  const bar = page.locator('#hist rect.bar[data-mark="79"]');
+  await expect(bar).toHaveCSS("fill", colours["A-"]);
+  await typeCutoff(page, "A", 78);
+  await expect(bar).toHaveAttribute("data-grade", "A");
+  await expect(bar).toHaveCSS("fill", colours.A);
+});
+
+test("Stage 2D: bars fade to their new colour in 150ms, and not at all under reduced motion", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  const bar = page.locator("#hist rect.bar").first();
+  await expect(bar).toHaveCSS("transition-duration", "0.15s");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(bar).toHaveCSS("transition-duration", "0s");
+});
+
+for (const scheme of ["light", "dark"]) {
+  test(`Stage 2D: the grade palette is ordered (OKLCH hue falls from A to E) in the ${scheme} theme`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    const colours = await gradeColours(page);
+    const hues = Object.values(colours).map(oklchHue);
+    for (let i = 1; i < hues.length; i++) expect(hues[i], `${Object.keys(colours)[i]} after ${Object.keys(colours)[i - 1]}`).toBeLessThan(hues[i - 1]);
+    // No reds, oranges or ambers: low grades must not read as errors.
+    for (const h of hues) expect(h > 90 && h < 330).toBe(true);
+  });
+}
 
 test("a11y: errors, notes and count changes are announced", async ({ page }) => {
   for (const id of ["uploadError", "courseError", "exportError"]) await expect(page.locator(`#${id}`)).toHaveAttribute("role", "alert");
@@ -1766,7 +1828,15 @@ for (const scheme of ["light", "dark"]) {
     for (const c of chips) expect.soft(contrast(c.fg, c.bg), `chip ${c.g}`).toBeGreaterThanOrEqual(4.5);
     for (const r of await barBandContrasts(page)) expect.soft(r, "bar").toBeGreaterThanOrEqual(3);
     // A focused bar (here: a searched student's) differs in hue and by 2:1 in lightness.
-    const neutral = await page.locator("#hist rect.bar").first().evaluate(b => getComputedStyle(b).fill);
+    // Stage 2D: bars carry grade colours now, so "neutral" is the --bar token.
+    const neutral = await page.evaluate(() => {
+      const p = document.createElement("span");
+      p.style.color = "var(--bar)";
+      document.body.append(p);
+      const c = getComputedStyle(p).color;
+      p.remove();
+      return c;
+    });
     await page.fill("#findId", "20247096");
     const lit = page.locator('#hist rect.bar[data-mark="79"]');
     await expect(lit).toHaveClass(/highlight/);

@@ -23,17 +23,21 @@
   --on-accent:#ffffff;             /* text on an accent fill */
   --danger:#b42318; --danger-soft:#fef3f2; --danger-rule:#f1c4bf;
   --shadow:0 24px 48px rgba(28,26,51,.24); --backdrop:rgba(28,26,51,.4);
-  /* Chart: every bar is one neutral tone (3.3:1 on the surface, 3.1:1 on the
-     alternate band shade); only focused bars (hover, search, borderline) use
-     --bar-focus. Colour is information, not decoration. */
+  /* Chart: bars take their grade's colour from the "Aurora" ramp (violet A
+     to green E, ordered in OKLCH; each >= 3:1 on the surface and band-alt).
+     Grade colour appears only on bars, share bars and chip dots. --bar is the
+     fallback before grades are assigned. Focused bars (hover, search,
+     borderline) use --bar-focus. */
+  --g-A:#4e2999; --g-Am:#3343a6; --g-B:#005aa3; --g-Bm:#006d97;
+  --g-C:#007b8b; --g-Cm:#00887e; --g-D:#0b936c; --g-E:#4e9a52;
   --bar:#8f8ca0; --bar-focus:var(--accent); --band-alt:#f8f7fc;
   --font:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   --radius-panel:12px; --radius-control:8px;
 }
 
 /* Dark: chosen with the toggle, or following the system when set to System.
-   The two blocks must stay identical (a test compares them). The focused-bar
-   tone is lighter than the accent so a lit bar clearly stands out. */
+   The two blocks must stay identical (a test compares them). In the dark
+   ramp A is the brightest, so it stays the most prominent. */
 :root[data-theme="dark"]{
   color-scheme:dark;
   --ink:#ecebf5; --ink-muted:#a6a3bf; --rule:#2e2c45; --rule-strong:#45425f;
@@ -42,6 +46,8 @@
   --on-accent:#121120;
   --danger:#f97066; --danger-soft:#3a1d22; --danger-rule:#6b2c2c;
   --shadow:0 24px 48px rgba(0,0,0,.5); --backdrop:rgba(0,0,0,.6);
+  --g-A:#c0aeff; --g-Am:#98b1ff; --g-B:#72b4f8; --g-Bm:#52b5df;
+  --g-C:#45b2c2; --g-Cm:#3faea4; --g-D:#43a883; --g-E:#5a9f5d;
   --bar:#6e6b88; --bar-focus:#c4b5ff; --band-alt:#201f35;
 }
 @media (prefers-color-scheme: dark){
@@ -53,6 +59,8 @@
     --on-accent:#121120;
     --danger:#f97066; --danger-soft:#3a1d22; --danger-rule:#6b2c2c;
     --shadow:0 24px 48px rgba(0,0,0,.5); --backdrop:rgba(0,0,0,.6);
+    --g-A:#c0aeff; --g-Am:#98b1ff; --g-B:#72b4f8; --g-Bm:#52b5df;
+    --g-C:#45b2c2; --g-Cm:#3faea4; --g-D:#43a883; --g-E:#5a9f5d;
     --bar:#6e6b88; --bar-focus:#c4b5ff; --band-alt:#201f35;
   }
 }
@@ -352,7 +360,16 @@ button:disabled{opacity:.45;cursor:not-allowed}
 /* Bands: no tints, just a barely visible shade on every other band. */
 #hist .band{fill:none}
 #hist .band.alt{fill:var(--band-alt)}
-#hist .bar{fill:var(--bar)}
+/* Each bar in its grade's colour; it recolours live as a cutoff moves. */
+#hist .bar{fill:var(--bar);transition:fill .15s}
+#hist .bar[data-grade="A"]{fill:var(--g-A)}
+#hist .bar[data-grade="A-"]{fill:var(--g-Am)}
+#hist .bar[data-grade="B"]{fill:var(--g-B)}
+#hist .bar[data-grade="B-"]{fill:var(--g-Bm)}
+#hist .bar[data-grade="C"]{fill:var(--g-C)}
+#hist .bar[data-grade="C-"]{fill:var(--g-Cm)}
+#hist .bar[data-grade="D"]{fill:var(--g-D)}
+#hist .bar[data-grade="E"]{fill:var(--g-E)}
 /* The accent marks only the bar(s) in focus: hovered or keyboard-read (.active),
    found by the search or hovered in the borderline list (.highlight). */
 #hist .bar.active,#hist .bar.highlight{fill:var(--bar-focus)}
@@ -1582,7 +1599,7 @@ function updateChart(){
     band.setAttribute("x",x(from));
     band.setAttribute("width",(to-from+1)*step);
   });
-  // The grade is data on the bar, not a colour (tests and tooltips read it).
+  // The grade on each bar drives its colour (CSS [data-grade]).
   chart.bars.forEach((bar,mark)=>{ if(bar) bar.dataset.grade=gradeFor(mark); });
   CUTOFF_GRADES.forEach(g=>{
     const h=chart.handles[g], cx=x(cutoffs[g]); // boundary = left edge of the cutoff mark

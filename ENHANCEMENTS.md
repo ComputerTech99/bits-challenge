@@ -597,3 +597,20 @@ rewritten to check the same guarantee through the new UI. None was deleted.
 | E7 search results (×4) and the Stage 2B walkthrough | 2C-8 | Same ID, mark and grade per result, as "20247096 79 marks A". |
 | E9 impact tests (×4) and the Stage 2B walkthrough | 2C-8: the list became a table. | Rows compared as ID, mark, default grade and new grade (same students, same order, same 10-then-Show-all behaviour, same focus after Show all). Added: the header row, the new grade in the accent (the ID isn't), and the table hidden when nobody changed. |
 | E8: chips AA and bars 3:1 per theme | 2C-1 | Same bar check in light and dark. Added: a searched (focused) bar is ≥ 2:1 from the neutral bar and clearly violet. |
+
+## Stage 2D: chart colour
+
+**Problem.** The restraint pass made the screen calm, but it also made the chart grey: eight grades looked identical, so the instructor had to read the handle labels to see where one grade ended and the next began.
+
+**Principle (CLAUDE.md).** The chart is the one place colour is allowed to be beautiful, and only as information. Grades are ordinal, so their colours are one ordered sweep (the "Aurora" ramp, violet A → blue → teal → green E, ordered by OKLCH hue), with no reds, oranges or ambers so low grades never read as errors. Grade colour appears only on the histogram bars and their legend (share bars and a dot on grade chips). Everything else stays neutral. Every step is a `style:` commit.
+
+| # | Change |
+|---|---|
+| 1 | **Aurora bars.** Eight `--g-*` tokens per theme (A is the brightest in dark, so it stays the most prominent). Each bar is filled by its `data-grade`, so it recolours the moment a cutoff moves past it, with a 150ms fill fade that is off under reduced motion. `--bar` stays only as the fallback before grades are assigned. Every grade colour is ≥ 3:1 on the surface and on the band shade in both themes. |
+
+### Tests rewritten in Stage 2D
+
+| Test | Why it changed | What it checks now |
+|---|---|---|
+| a11y: bar contrast (was "one neutral tone, all bars share one fill") | 2D-1: bars carry grade colours. | Every distinct bar fill is ≥ 3:1 against the surface and every shaded band (light here, both themes in the E8 test). New tests: each bar's fill is its grade's `--g-*` colour, eight distinct colours; bar 79 turns from A- to A colour when A moves to 78; the fill transition is 150ms and 0s under reduced motion; OKLCH hue strictly falls from A to E, with no red/orange/amber hue, in light and dark. |
+| E8: chips AA and bars 3:1 per theme | 2D-1: there is no neutral bar left to compare a focused bar with. | The focused bar is compared with the `--bar` token instead (replaced by the dimming check in 2D-3). |
