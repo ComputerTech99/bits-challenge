@@ -607,13 +607,16 @@ body.grading .empty-state{display:none}
   margin:0 auto;
   padding:12px 24px;
   display:flex;
-  flex-wrap:wrap;
   align-items:center;
   justify-content:space-between;
-  gap:8px 16px;
+  gap:16px;
 }
-.actionbar-status{display:flex;flex-direction:column;gap:4px;min-width:0}
-.actions{display:flex;gap:8px;margin-left:auto}
+/* One row at every width: status on the left, the button on the right (#43). */
+.actionbar-status{flex:1;display:flex;flex-direction:column;gap:4px;min-width:0}
+.actions{display:flex;gap:8px;margin-left:auto;flex-shrink:0}
+/* Whatever the browser scrolls into view (focus, find, anchors) stops above
+   the sticky bar instead of under it. --actionbar-h is measured in script. */
+html{scroll-padding-bottom:var(--actionbar-h,0px)}
 
 /* ===== RESPONSIVE ===== */
 @media (max-width:1023px){
@@ -641,8 +644,10 @@ body.grading .empty-state{display:none}
   .theme{order:1}
   .appbar-context{order:2;flex-basis:100%;margin-left:0}
   .stats{grid-template-columns:repeat(3,1fr)}
-  .actions{width:100%}
-  .actions button{flex:1}
+  /* The course label goes above a full-width select, so the status fits (#43). */
+  .setup.collapsed .controls{width:100%}
+  .setup.collapsed .controls .field{flex-direction:column;align-items:stretch;gap:4px}
+  .setup.collapsed #course{width:100%}
 }
 
 @media (prefers-reduced-motion: reduce){
@@ -1540,9 +1545,10 @@ function buildChart(animate){
   const W=chartBox.clientWidth;
   if(!marks.length || !W) return;
 
-  const H=W<500 ? 240 : 300;
+  const narrow=W<500;
   const m={left:36,right:8,top:PILL_H+8,bottom:28}; // top: the handle label row
-  const plotW=W-m.left-m.right, plotH=H-m.top-m.bottom;
+  const plotH=narrow ? 220 : 264;             // at least 220px of plot on a phone (#43)
+  const plotW=W-m.left-m.right, H=m.top+plotH+m.bottom;
   const step=plotW/101;                       // width of one mark
   const n=marks.length, {mean,std}=meanStd(marks);
   const counts=Array(101).fill(0);
@@ -1565,14 +1571,15 @@ function buildChart(animate){
     chart.bands[g]=svgEl("rect",{y:m.top,height:plotH,class:i%2 ? "band alt" : "band","data-grade":g},bandLayer);
   });
 
-  // Y axis: integer ticks with faint gridlines. X axis: a tick every 10 marks.
+  // Y axis: integer ticks with faint gridlines. X axis: a tick every 10 marks,
+  // or every 20 on a narrow chart so the labels aren't cramped (#43).
   const axes=svgEl("g",{class:"axes","aria-hidden":"true"},hist);
   for(let v=0;v<=scale.max;v+=scale.step){
     svgEl("line",{x1:m.left,x2:W-m.right,y1:y(v),y2:y(v),class:"gridline"},axes);
     svgEl("text",{x:m.left-6,y:y(v)+4,"text-anchor":"end"},axes).textContent=v;
   }
   svgEl("line",{x1:m.left,x2:W-m.right,y1:base,y2:base,class:"axis"},axes);
-  for(let v=0;v<=100;v+=10){
+  for(let v=0;v<=100;v+=narrow ? 20 : 10){
     const cx=x(v)+step/2;
     svgEl("line",{x1:cx,x2:cx,y1:base,y2:base+4,class:"axis"},axes);
     svgEl("text",{x:cx,y:base+18,"text-anchor":"middle"},axes).textContent=v;
@@ -1850,6 +1857,11 @@ function updateChartSummary(rows,counts){
   chartSummary.textContent=`${rows.length} marks in ${course.value}, from ${Math.min(...marks)} to ${Math.max(...marks)}, `+
     `mean ${mean.toFixed(2)}, standard deviation ${std.toFixed(2)}. Students per grade: ${perGrade}.`;
 }
+
+// The sticky action bar's height, for scroll-padding-bottom (#43).
+new ResizeObserver(([e])=>{
+  document.documentElement.style.setProperty("--actionbar-h",e.target.offsetHeight+"px");
+}).observe(document.querySelector(".actionbar"));
 
 // Rebuild the chart when its width changes (layout switch, window resize).
 new ResizeObserver(()=>{

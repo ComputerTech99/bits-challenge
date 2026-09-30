@@ -2245,3 +2245,61 @@ for (const width of [1440, 1024, 390]) {
     for (const c of cells) expect(c, c.text).toEqual({ text: c.text, lines: 1, ws: "nowrap" });
   });
 }
+
+test.describe("#43 mobile layout at 390px", () => {
+  test.use({ viewport: { width: 390, height: 800 } });
+
+  test("#43 the course label sits above a full-width select", async ({ page }) => {
+    await startGrading(page, "demo_marks.xlsx", INTRO);
+    const label = await page.locator('label[for="course"]').boundingBox();
+    const select = await page.locator("#course").boundingBox();
+    const setup = await page.locator(".setup").evaluate(el => {
+      const r = el.getBoundingClientRect(), s = getComputedStyle(el);
+      return { left: r.left + parseFloat(s.paddingLeft), width: el.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight) };
+    });
+    expect(label.y + label.height).toBeLessThanOrEqual(select.y);
+    expect(Math.abs(select.x - setup.left)).toBeLessThanOrEqual(1);
+    expect(Math.abs(select.width - setup.width)).toBeLessThanOrEqual(1);
+  });
+
+  test("#43 the action bar is one row: status left, button right", async ({ page }) => {
+    await startGrading(page, "demo_marks.xlsx", INTRO);
+    await typeCutoff(page, "A", 78);
+    const status = await page.locator("#changeCount").boundingBox();
+    const button = await page.locator("#reviewBtn").boundingBox();
+    expect(status.x + status.width).toBeLessThanOrEqual(button.x);
+    expect(Math.abs((status.y + status.height / 2) - (button.y + button.height / 2))).toBeLessThanOrEqual(4);
+    const bar = await page.locator(".actionbar").boundingBox();
+    expect(bar.height).toBeLessThanOrEqual(72);
+  });
+
+  test("#43 the action bar's height is reserved, so it never covers what is scrolled to", async ({ page }) => {
+    await startGrading(page, "demo_marks.xlsx", INTRO);
+    const { pad, bar } = await page.evaluate(() => ({
+      pad: parseFloat(getComputedStyle(document.documentElement).scrollPaddingBottom),
+      bar: document.querySelector(".actionbar").getBoundingClientRect().height,
+    }));
+    expect(pad).toBeGreaterThanOrEqual(bar);
+    // Bring the x-axis into view the way the browser does for focus/anchors:
+    // it lands above the bar, not under it.
+    await page.locator("#hist").evaluate(el => el.scrollIntoView({ block: "end" }));
+    const hist = await page.locator("#hist").boundingBox();
+    const barBox = await page.locator(".actionbar").boundingBox();
+    expect(hist.y + hist.height).toBeLessThanOrEqual(barBox.y + 1);
+  });
+
+  test("#43 the chart has at least 220px of plot and labels the x-axis every 20 marks", async ({ page }) => {
+    await startGrading(page, "demo_marks.xlsx", INTRO);
+    const plotH = await page.locator("#hist .band").first().evaluate(r => r.getBBox().height);
+    expect(plotH).toBeGreaterThanOrEqual(220);
+    const labels = await page.locator('#hist .axes text[text-anchor="middle"]').allTextContents();
+    expect(labels).toEqual(["0", "20", "40", "60", "80", "100"]);
+  });
+});
+
+test("#43 wide charts keep an x-axis label every 10 marks", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  const labels = await page.locator('#hist .axes text[text-anchor="middle"]').allTextContents();
+  expect(labels).toEqual(["0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100"]);
+});
