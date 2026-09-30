@@ -1272,6 +1272,12 @@ for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 });
     await startGrading(page, "demo_marks.xlsx", INTRO);
     expect(await pillsOverlap(page)).toBe(false);
+    // Stage 2C: one label row. Full "A 80" labels where they fit (1440),
+    // values only where they would collide (390).
+    const labels = await page.locator("#hist .cutoff-label").allTextContents();
+    expect(labels).toEqual(width === 1440
+      ? ["A 80", "A- 70", "B 60", "B- 50", "C 40", "C- 30", "D 20"]
+      : ["80", "70", "60", "50", "40", "30", "20"]);
     await typeCutoff(page, "A-", 78); // A- right next to A
     expect(await pillsOverlap(page)).toBe(false);
   });

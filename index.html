@@ -296,7 +296,6 @@ button:disabled{opacity:.45;cursor:not-allowed}
 #hist{display:block;width:100%;overflow:visible}
 #hist:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:4px}
 #hist text{font-family:var(--font);font-size:12px;fill:var(--ink-muted);font-variant-numeric:tabular-nums}
-#hist .band-letter{font-weight:600;fill:var(--ink)}
 #hist .gridline{stroke:var(--rule);stroke-width:1}
 #hist .axis{stroke:var(--rule-strong);stroke-width:1}
 #hist .curve{fill:none;stroke:var(--ink-muted);stroke-width:1.5;stroke-dasharray:6 4}
@@ -311,13 +310,14 @@ button:disabled{opacity:.45;cursor:not-allowed}
 /* Highlighting one mark dims the rest. */
 #hist.has-highlight .bar:not(.highlight){opacity:.35}
 #hist .cutoff-line{stroke:var(--accent);stroke-width:1.5}
-#hist .cutoff-knob{fill:var(--surface);stroke:var(--accent-strong);stroke-width:1.5}
-#hist .cutoff-label{font-weight:600;fill:var(--ink);pointer-events:none}
+/* The one label row: calm "A 80" pills with a neutral border. */
+#hist .cutoff-knob{fill:var(--surface);stroke:var(--rule-strong);stroke-width:1}
+#hist .cutoff-label{font-weight:500;fill:var(--ink);pointer-events:none}
 #hist .cutoff-handle,#hist .handle-hit{cursor:ew-resize;touch-action:none}
-/* Active (hovered or being dragged): accent line and a filled accent pill. */
-#hist .cutoff-handle:hover .cutoff-line,#hist .cutoff-handle.dragging .cutoff-line{stroke:var(--accent);stroke-width:2.5}
-#hist .cutoff-handle:hover .cutoff-knob,#hist .cutoff-handle.dragging .cutoff-knob{stroke:var(--accent);fill:var(--accent)}
-#hist .cutoff-handle:hover .cutoff-label,#hist .cutoff-handle.dragging .cutoff-label{fill:var(--on-accent)}
+/* Active (hovered or being dragged): a heavier line, accent border and text. */
+#hist .cutoff-handle:hover .cutoff-line,#hist .cutoff-handle.dragging .cutoff-line{stroke-width:2.5}
+#hist .cutoff-handle:hover .cutoff-knob,#hist .cutoff-handle.dragging .cutoff-knob{stroke:var(--accent)}
+#hist .cutoff-handle:hover .cutoff-label,#hist .cutoff-handle.dragging .cutoff-label{fill:var(--accent)}
 #hist .handle-hit{fill:transparent}
 #hist .default-marker line{stroke:var(--ink-muted);stroke-width:1;stroke-dasharray:3 3;opacity:.6}
 #hist .default-hit{fill:transparent}
@@ -1376,7 +1376,7 @@ function buildChart(animate){
   if(!marks.length || !W) return;
 
   const H=W<500 ? 240 : 300;
-  const m={left:36,right:8,top:24,bottom:28};
+  const m={left:36,right:8,top:PILL_H+8,bottom:28}; // top: the handle label row
   const plotW=W-m.left-m.right, plotH=H-m.top-m.bottom;
   const step=plotW/101;                       // width of one mark
   const n=marks.length, {mean,std}=meanStd(marks);
@@ -1394,14 +1394,10 @@ function buildChart(animate){
   hist.setAttribute("height",H);
   chart={W,H,m,step,x,y,base,counts,bands:{},bars:[],hits:[],defaults:{},handles:{}};
 
-  // Grade bands (every other one faintly shaded + letter), positioned in updateChart().
+  // Grade bands (every other one faintly shaded), positioned in updateChart().
   const bandLayer=svgEl("g",{class:"bands"},hist);
   GRADES.forEach((g,i)=>{
-    chart.bands[g]={
-      rect:svgEl("rect",{y:m.top,height:plotH,class:i%2 ? "band alt" : "band","data-grade":g},bandLayer),
-      label:svgEl("text",{y:m.top-8,"text-anchor":"middle",class:"band-letter"},bandLayer)
-    };
-    chart.bands[g].label.textContent=g;
+    chart.bands[g]=svgEl("rect",{y:m.top,height:plotH,class:i%2 ? "band alt" : "band","data-grade":g},bandLayer);
   });
 
   // Y axis: integer ticks with faint gridlines. X axis: a tick every 10 marks.
@@ -1468,7 +1464,7 @@ function buildChart(animate){
   CUTOFF_GRADES.forEach(g=>{
     const h=svgEl("g",{class:"cutoff-handle","data-grade":g},handleLayer);
     svgEl("rect",{class:"handle-hit",y:m.top,width:hitWidth,height:plotH},h);
-    svgEl("line",{class:"cutoff-line",y1:m.top,y2:base},h);
+    svgEl("line",{class:"cutoff-line",y1:m.top-6,y2:base},h); // up to its pill
     // The grab pill: "A 80", sized and placed in updateChart().
     svgEl("rect",{class:"cutoff-knob",height:PILL_H,rx:PILL_H/2},h);
     svgEl("text",{class:"cutoff-label","text-anchor":"middle"},h);
@@ -1490,12 +1486,9 @@ function updateChart(){
   if(!chart) return;
   const {x,step,m}=chart;
   GRADES.forEach(g=>{
-    const [from,to]=bandRange(g), b=chart.bands[g];
-    const left=x(from), width=(to-from+1)*step;
-    b.rect.setAttribute("x",left);
-    b.rect.setAttribute("width",width);
-    b.label.setAttribute("x",left+width/2);
-    b.label.style.display=width<14 ? "none" : ""; // too narrow for a letter
+    const [from,to]=bandRange(g), band=chart.bands[g];
+    band.setAttribute("x",x(from));
+    band.setAttribute("width",(to-from+1)*step);
   });
   // The grade is data on the bar, not a colour (tests and tooltips read it).
   chart.bars.forEach((bar,mark)=>{ if(bar) bar.dataset.grade=gradeFor(mark); });
@@ -1504,31 +1497,41 @@ function updateChart(){
     h.querySelector(".handle-hit").setAttribute("x",cx-chart.hitWidth/2);
     const line=h.querySelector(".cutoff-line");
     line.setAttribute("x1",cx); line.setAttribute("x2",cx);
-    h.querySelector(".cutoff-label").textContent=`${g} ${cutoffs[g]}`;
     chart.defaults[g].style.display=cutoffs[g]===DEFAULT_CUTOFFS[g] ? "none" : "";
   });
   layoutPills();
   applyHighlight();
 }
 
-// Places each handle's pill on its line near the top of the plot. Pills that
-// would touch the one before them drop to a second row, so when cutoffs are
-// close together (or the chart is narrow) no label covers another.
-const PILL_H=20, PILL_GAP=4;
-function layoutPills(){
+// The chart's one label row: each handle's pill ("A 80") sits on its line
+// above the plot. If any two would touch, every pill shows its value only
+// ("80"), and the grade letters stay in the cutoff editor. If even values
+// touch (adjacent cutoffs on a narrow chart), the later pill drops just
+// inside the top of the plot, so no label ever covers another.
+const PILL_H=20, PILL_GAP=4, PILL_PAD=8;
+function pillBoxes(valueOnly){
   const {x,m,W}=chart;
-  const rowEnds=[-Infinity,-Infinity]; // right edge of the last pill in each row
   // Left to right: D has the lowest cutoff, A the highest.
-  [...CUTOFF_GRADES].reverse().forEach(g=>{
+  return [...CUTOFF_GRADES].reverse().map(g=>{
     const h=chart.handles[g], label=h.querySelector(".cutoff-label");
+    label.textContent=valueOnly ? String(cutoffs[g]) : `${g} ${cutoffs[g]}`;
     const textW=label.getComputedTextLength(); // 0 if not rendered yet
-    const w=(textW>0 ? Math.ceil(textW) : 30)+14;
+    const w=(textW>0 ? Math.ceil(textW) : 7*label.textContent.length)+PILL_PAD;
     // Centred on the line, but kept inside the plot at either end.
     const left=Math.min(W-m.right-w,Math.max(m.left,x(cutoffs[g])-w/2));
+    return {h,label,w,left};
+  });
+}
+function layoutPills(){
+  const touch=boxes=>boxes.some((b,i)=>i>0 && b.left<boxes[i-1].left+boxes[i-1].w+PILL_GAP);
+  let boxes=pillBoxes(false);
+  if(touch(boxes)) boxes=pillBoxes(true);
+  const rowEnds=[-Infinity,-Infinity]; // right edge of the last pill in each row
+  boxes.forEach(({h,label,w,left})=>{
     let row=rowEnds.findIndex(end=>left>=end+PILL_GAP);
     if(row<0) row=rowEnds[0]<=rowEnds[1] ? 0 : 1; // both taken: the row that ends first
     rowEnds[row]=left+w;
-    const top=m.top+4+row*(PILL_H+PILL_GAP);
+    const top=row===0 ? chart.m.top-PILL_H-6 : chart.m.top+4;
     const knob=h.querySelector(".cutoff-knob");
     knob.setAttribute("x",left); knob.setAttribute("y",top); knob.setAttribute("width",w);
     label.setAttribute("x",left+w/2); label.setAttribute("y",top+PILL_H/2+4);
