@@ -558,3 +558,21 @@ rewritten to check the same guarantee through the new UI. None was deleted.
 | #19 ×2 (reset asks once / dismiss keeps cutoffs) | E5 moved the button to the chart panel header as "Reset to defaults" (`#resetAll`). Then #35 removed the `confirm()`. | The guarantee that a reset never costs you your cutoffs, now through undo: (a) one click resets every cutoff and no dialog appears; (b) the notice's Undo restores the cutoffs. |
 | #22 (reset inert before a course) | E5: the button is inside the chart panel, which is hidden until a course is open. | Hidden and disabled on a fresh page and after an upload. A dispatched click causes no error and no dialog. |
 | E1: the action bar counts changes | E5: the reset button left the action bar. | Same counts. The enabled/disabled check now uses `#resetAll`. |
+
+## Stage 2C: restraint pass
+
+**Problem.** By the end of Stage 2B the screen had turned loud. There were eight grade hues on the bars, eight band tints, rainbow chips, purple headings, a second row of band letters above the handle labels, and an app bar with six things in it. Colour was everywhere, so none of it pointed anywhere.
+
+**Principle (CLAUDE.md).** Colour is information, not decoration. The screen is neutral by default. The accent marks only what is interactive (the primary action, focus rings, cutoff lines and handles) or what the user is focused on right now (a hovered, searched or borderline student's bar, or a changed grade in the review). No behaviour changes; every step is a `style:` commit.
+
+| # | Change |
+|---|---|
+| 1 | **Chart colour.** Every bar is one neutral `--bar` tone. Only focused bars (hovered or keyboard-read, found by the search, hovered in the borderline list) use `--bar-focus`. The eight band tints are gone; every other band has a barely visible `--band-alt` shade. Cutoff lines use the accent. The bell curve is unchanged. |
+
+### Tests rewritten in Stage 2C
+
+| Test | Why it changed | What it checks now |
+|---|---|---|
+| E2: one bar per scored mark (was "coloured by the grade") | 2C-1: bars no longer carry a grade colour. | Bar 79 has `data-grade="A-"`, and `"A"` once A starts at 79. |
+| a11y: bar contrast (was "3:1 against its grade band") | 2C-1: one bar tone over the surface or the alternate band shade. | Bar ≥ 3:1 against the surface and against every shaded band. All bars share one fill. |
+| E8: chips AA and bars 3:1 per theme | 2C-1 | Same bar check in light and dark. Added: a searched (focused) bar is ≥ 2:1 from the neutral bar and clearly violet. |

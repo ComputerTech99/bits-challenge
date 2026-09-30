@@ -24,6 +24,10 @@
   --danger:#b42318; --danger-soft:#fef3f2; --danger-rule:#f1c4bf;
   --shadow:0 24px 48px rgba(28,26,51,.24); --backdrop:rgba(28,26,51,.4);
   --logo-plate:transparent; --logo-pad:0;
+  /* Chart: every bar is one neutral tone (3.3:1 on the surface, 3.1:1 on the
+     alternate band shade); only focused bars (hover, search, borderline) use
+     --bar-focus. Colour is information, not decoration. */
+  --bar:#8f8ca0; --bar-focus:var(--accent); --band-alt:#f8f7fc;
   /* Grade colours: one hue per letter, the minus grade a lighter tint of it.
      Every bar has at least 3:1 against its band tint, and chip text is AA. */
   --g-A:#3b2a9e; --g-Am:#7764d7;   /* indigo */
@@ -39,8 +43,8 @@
 }
 
 /* Dark: chosen with the toggle, or following the system when set to System.
-   The two blocks must stay identical (a test compares them). The grade
-   colours are lighter so bars keep 3:1 against the dark bands. */
+   The two blocks must stay identical (a test compares them). The focused-bar
+   tone is lighter than the accent so a lit bar clearly stands out. */
 :root[data-theme="dark"]{
   color-scheme:dark;
   --ink:#ecebf5; --ink-muted:#a6a3bf; --rule:#2e2c45; --rule-strong:#45425f;
@@ -50,6 +54,7 @@
   --danger:#f97066; --danger-soft:#3a1d22; --danger-rule:#6b2c2c;
   --shadow:0 24px 48px rgba(0,0,0,.5); --backdrop:rgba(0,0,0,.6);
   --logo-plate:#f5f4fa; --logo-pad:4px 8px;
+  --bar:#6e6b88; --bar-focus:#c4b5ff; --band-alt:#201f35;
   --g-A:#6b59d3; --g-Am:#9080de;
   --g-B:#226db7; --g-Bm:#5593cf;
   --g-C:#16806f; --g-Cm:#479c8d;
@@ -68,6 +73,7 @@
     --danger:#f97066; --danger-soft:#3a1d22; --danger-rule:#6b2c2c;
     --shadow:0 24px 48px rgba(0,0,0,.5); --backdrop:rgba(0,0,0,.6);
     --logo-plate:#f5f4fa; --logo-pad:4px 8px;
+    --bar:#6e6b88; --bar-focus:#c4b5ff; --band-alt:#201f35;
     --g-A:#6b59d3; --g-Am:#9080de;
     --g-B:#226db7; --g-Bm:#5593cf;
     --g-C:#16806f; --g-Cm:#479c8d;
@@ -295,10 +301,16 @@ button:disabled{opacity:.45;cursor:not-allowed}
 #hist .axis{stroke:var(--rule-strong);stroke-width:1}
 #hist .curve{fill:none;stroke:var(--ink-muted);stroke-width:1.5;stroke-dasharray:6 4}
 #hist .hit{fill:transparent}
-#hist .hit.active{fill:var(--accent);fill-opacity:.12}
-/* Highlighting one mark dims the rest, so even a dark bar stands out. */
-#hist.has-highlight .bar:not(.highlight){opacity:.25}
-#hist .cutoff-line{stroke:var(--accent-strong);stroke-width:1.5}
+/* Bands: no tints, just a barely visible shade on every other band. */
+#hist .band{fill:none}
+#hist .band.alt{fill:var(--band-alt)}
+#hist .bar{fill:var(--bar)}
+/* The accent marks only the bar(s) in focus: hovered or keyboard-read (.active),
+   found by the search or hovered in the borderline list (.highlight). */
+#hist .bar.active,#hist .bar.highlight{fill:var(--bar-focus)}
+/* Highlighting one mark dims the rest. */
+#hist.has-highlight .bar:not(.highlight){opacity:.35}
+#hist .cutoff-line{stroke:var(--accent);stroke-width:1.5}
 #hist .cutoff-knob{fill:var(--surface);stroke:var(--accent-strong);stroke-width:1.5}
 #hist .cutoff-label{font-weight:600;fill:var(--ink);pointer-events:none}
 #hist .cutoff-handle,#hist .handle-hit{cursor:ew-resize;touch-action:none}
@@ -1319,12 +1331,11 @@ document.addEventListener("keydown",e=>{
 });
 
 // ===== HISTOGRAM (inline SVG) =====
-// One bar per mark 0–100, coloured by gradeFor(mark), with grade bands behind
-// and a draggable line at each cutoff. buildChart() creates the elements once
-// per course (and on resize); updateChart() only moves/recolours them, so a
-// handle being dragged is never destroyed mid-drag.
+// One neutral bar per mark 0–100, tagged with its grade from gradeFor(mark),
+// over grade bands, with a draggable line at each cutoff. buildChart() creates
+// the elements once per course (and on resize); updateChart() only moves and
+// re-tags them, so a handle being dragged is never destroyed mid-drag.
 const SVG_NS="http://www.w3.org/2000/svg";
-const GRADE_COLOUR={"A":"--g-A","A-":"--g-Am","B":"--g-B","B-":"--g-Bm","C":"--g-C","C-":"--g-Cm","D":"--g-D","E":"--g-E"};
 let chart=null; // geometry and element references for the open course
 
 function svgEl(tag,attrs={},parent){
@@ -1383,11 +1394,11 @@ function buildChart(animate){
   hist.setAttribute("height",H);
   chart={W,H,m,step,x,y,base,counts,bands:{},bars:[],hits:[],defaults:{},handles:{}};
 
-  // Grade bands (tint + letter), positioned in updateChart().
+  // Grade bands (every other one faintly shaded + letter), positioned in updateChart().
   const bandLayer=svgEl("g",{class:"bands"},hist);
-  GRADES.forEach(g=>{
+  GRADES.forEach((g,i)=>{
     chart.bands[g]={
-      rect:svgEl("rect",{y:m.top,height:plotH,style:`fill:var(${GRADE_COLOUR[g]});fill-opacity:.07`},bandLayer),
+      rect:svgEl("rect",{y:m.top,height:plotH,class:i%2 ? "band alt" : "band","data-grade":g},bandLayer),
       label:svgEl("text",{y:m.top-8,"text-anchor":"middle",class:"band-letter"},bandLayer)
     };
     chart.bands[g].label.textContent=g;
@@ -1486,11 +1497,8 @@ function updateChart(){
     b.label.setAttribute("x",left+width/2);
     b.label.style.display=width<14 ? "none" : ""; // too narrow for a letter
   });
-  chart.bars.forEach((bar,mark)=>{
-    if(!bar) return;
-    const g=gradeFor(mark);
-    bar.style.fill=`var(${GRADE_COLOUR[g]})`;
-  });
+  // The grade is data on the bar, not a colour (tests and tooltips read it).
+  chart.bars.forEach((bar,mark)=>{ if(bar) bar.dataset.grade=gradeFor(mark); });
   CUTOFF_GRADES.forEach(g=>{
     const h=chart.handles[g], cx=x(cutoffs[g]); // boundary = left edge of the cutoff mark
     h.querySelector(".handle-hit").setAttribute("x",cx-chart.hitWidth/2);
@@ -1573,7 +1581,7 @@ function tooltipText(mark){
 }
 function showMarkTooltip(mark){
   if(!chart) return;
-  chart.hits.forEach((r,i)=>r.classList.toggle("active",i===mark));
+  chart.bars.forEach((b,i)=>b && b.classList.toggle("active",i===mark));
   tooltip.textContent=tooltipText(mark);
   const box=hist.getBoundingClientRect(), k=box.width/chart.W;
   const top=chart.counts[mark] ? chart.y(chart.counts[mark]) : chart.base;
@@ -1583,7 +1591,7 @@ function showMarkTooltip(mark){
 }
 function hideMarkTooltip(){
   if(!chart) return;
-  chart.hits.forEach(r=>r.classList.remove("active"));
+  chart.bars.forEach(b=>b && b.classList.remove("active"));
   tooltip.hidden=true;
 }
 

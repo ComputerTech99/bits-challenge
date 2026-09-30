@@ -207,7 +207,7 @@ async function chartGeometry(page) {
     const path = svg.querySelector("path.curve");
     return {
       bars: [...svg.querySelectorAll("rect.bar")].map(b => ({
-        mark: Number(b.dataset.mark), x: num(b, "x"), w: num(b, "width"), y: num(b, "y"), h: num(b, "height"), fill: b.style.fill })),
+        mark: Number(b.dataset.mark), x: num(b, "x"), w: num(b, "width"), y: num(b, "y"), h: num(b, "height"), grade: b.dataset.grade })),
       curve: path ? path.getAttribute("d").match(/[ML][^ML]+/g).map(p => p.slice(1).trim().split(" ").map(Number)) : [],
       hitX: hits.map(h => num(h, "x")),
       step: hits.length ? num(hits[0], "width") : 0,
@@ -787,12 +787,14 @@ async function dragHandle(page, grade, toMark) {
   await page.mouse.up();
 }
 
-test("E2: one bar per scored mark, coloured by the grade it currently receives", async ({ page }) => {
+// Stage 2C: bars are one neutral tone; the grade is carried as data-grade
+// (rewritten from asserting the A-/A fill colours).
+test("E2: one bar per scored mark, tagged with the grade it currently receives", async ({ page }) => {
   await startGrading(page, "demo_marks.xlsx", INTRO);
   const bar = page.locator('#hist rect.bar[data-mark="79"]');
-  await expect(bar).toHaveCSS("fill", "rgb(119, 100, 215)"); // A- (#7764d7)
+  await expect(bar).toHaveAttribute("data-grade", "A-");
   await typeCutoff(page, "A", 79);
-  await expect(bar).toHaveCSS("fill", "rgb(59, 42, 158)");   // A  (#3b2a9e)
+  await expect(bar).toHaveAttribute("data-grade", "A");
   expect((await chartGeometry(page)).bars).toHaveLength(new Set(introMarks()).size);
 });
 
@@ -1015,26 +1017,25 @@ test("a11y: text on every grade-ramp step meets WCAG AA (4.5:1)", async ({ page 
   for (const c of chips) expect.soft(contrast(c.fg, c.bg), `grade ${c.g}`).toBeGreaterThanOrEqual(4.5);
 });
 
-// Each band is its grade colour at low opacity over the panel. A bar in that
-// grade must stand out from it by at least 3:1 (WCAG 1.4.11, non-text contrast).
+// Stage 2C: every bar is the same neutral tone over either the bare surface or
+// the faint alternate band shade. It must stand out from both by at least 3:1
+// (WCAG 1.4.11, non-text contrast). Rewritten from one ratio per grade colour.
 async function barBandContrasts(page) {
-  const bands = await page.locator("#hist .bands rect").evaluateAll(rects => {
-    const surface = getComputedStyle(document.querySelector(".panel")).backgroundColor;
-    return rects.map(r => ({ fill: getComputedStyle(r).fill, alpha: Number(getComputedStyle(r).fillOpacity), surface }));
+  const c = await page.evaluate(() => {
+    const fill = sel => getComputedStyle(document.querySelector(sel)).fill;
+    return { bar: fill("#hist rect.bar"), surface: getComputedStyle(document.querySelector(".panel")).backgroundColor,
+      bands: [...document.querySelectorAll("#hist .bands rect")].map(r => getComputedStyle(r).fill).filter(f => f !== "none") };
   });
-  const nums = s => s.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number);
-  return bands.map(({ fill, alpha, surface }) => {
-    const [c, bg] = [nums(fill), nums(surface)];
-    const band = `rgb(${c.map((v, i) => Math.round(v * alpha + bg[i] * (1 - alpha))).join(",")})`;
-    return contrast(fill, band);
-  });
+  expect(c.bands.length).toBeGreaterThan(0); // some bands are shaded
+  return [contrast(c.bar, c.surface), ...c.bands.map(b => contrast(c.bar, b))];
 }
 
-test("a11y: every bar has at least 3:1 contrast against its grade band", async ({ page }) => {
+test("a11y: every bar has at least 3:1 contrast against the surface and the band shade", async ({ page }) => {
   await startGrading(page, "demo_marks.xlsx", INTRO);
-  const ratios = await barBandContrasts(page);
-  expect(ratios).toHaveLength(8);
-  ["A", "A-", "B", "B-", "C", "C-", "D", "E"].forEach((g, i) => expect.soft(ratios[i], `grade ${g}`).toBeGreaterThanOrEqual(3));
+  for (const r of await barBandContrasts(page)) expect.soft(r).toBeGreaterThanOrEqual(3);
+  // One neutral tone for every grade: no colour per grade.
+  const fills = await page.locator("#hist rect.bar").evaluateAll(bs => [...new Set(bs.map(b => getComputedStyle(b).fill))]);
+  expect(fills).toHaveLength(1);
 });
 
 test("a11y: errors, notes and count changes are announced", async ({ page }) => {
@@ -1666,8 +1667,16 @@ for (const scheme of ["light", "dark"]) {
     const chips = await page.locator("#gradeSummary .chip").evaluateAll(els =>
       els.map(e => ({ g: e.textContent, fg: getComputedStyle(e).color, bg: getComputedStyle(e).backgroundColor })));
     for (const c of chips) expect.soft(contrast(c.fg, c.bg), `chip ${c.g}`).toBeGreaterThanOrEqual(4.5);
-    const ratios = await barBandContrasts(page);
-    ratios.forEach((r, i) => expect.soft(r, `bar ${chips[i].g}`).toBeGreaterThanOrEqual(3));
+    for (const r of await barBandContrasts(page)) expect.soft(r, "bar").toBeGreaterThanOrEqual(3);
+    // A focused bar (here: a searched student's) differs in hue and by 2:1 in lightness.
+    const neutral = await page.locator("#hist rect.bar").first().evaluate(b => getComputedStyle(b).fill);
+    await page.fill("#findId", "20247096");
+    const lit = page.locator('#hist rect.bar[data-mark="79"]');
+    await expect(lit).toHaveClass(/highlight/);
+    const focus = await lit.evaluate(b => getComputedStyle(b).fill);
+    expect(contrast(focus, neutral)).toBeGreaterThanOrEqual(2);
+    const [r, g, b] = focus.match(/\d+/g).map(Number);
+    expect(b - Math.min(r, g)).toBeGreaterThan(40); // clearly violet, not a grey
     // Body text and muted text on the panel surface.
     const text = await page.evaluate(() => {
       const panel = getComputedStyle(document.querySelector(".panel")).backgroundColor;
