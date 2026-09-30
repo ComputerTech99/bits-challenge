@@ -1629,6 +1629,38 @@ test("#35 Reset to defaults uses no native confirm() anywhere", async ({ page })
   expect(dialogs).toEqual([]);
 });
 
+// ===== #38: the spreadsheet reader fails to load =====
+// Routes added here take precedence over openApp()'s route that serves the CDN copy.
+const CDN_SHEETJS = "**/npm/xlsx*/dist/xlsx.full.min.js", LOCAL_SHEETJS = "**/assets/xlsx.full.min.js";
+
+test("#38 when the CDN copy of SheetJS fails, the vendored copy loads the file", async ({ page }) => {
+  await page.route(CDN_SHEETJS, route => route.abort());
+  await page.goto("/");
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await expect(page.locator("#uploadError")).toBeEmpty();
+  await expect(stat(page, "Max")).toHaveText("100");
+});
+
+test("#38 when both copies fail, the message blames the connection, not the file", async ({ page }) => {
+  await page.route(CDN_SHEETJS, route => route.abort());
+  await page.route(LOCAL_SHEETJS, route => route.abort());
+  await page.goto("/");
+  await page.fill("#instructor", "Dr Rao");
+  await upload(page, "demo_marks.xlsx");
+  await expect(page.locator("#uploadError")).toHaveText(
+    "The spreadsheet reader didn't load. Check your connection and reload the page.");
+  await expect(page.locator("#uploadError")).not.toContainText("could not be read");
+  await expect(page.locator("#course option")).toHaveCount(1);
+});
+
+test("#38 the vendored SheetJS is the same 0.18.5 build as the CDN copy", async () => {
+  const fs = require("fs"), path = require("path");
+  const vendored = fs.readFileSync(path.join(__dirname, "..", "assets", "xlsx.full.min.js"));
+  const npm = fs.readFileSync(path.join(__dirname, "..", "node_modules", "xlsx", "dist", "xlsx.full.min.js"));
+  expect(vendored.equals(npm)).toBe(true);
+  expect(vendored.toString("utf8")).toContain('version="0.18.5"');
+});
+
 // ===== E6: per-course progress and autosave =====
 
 // Stage 2C: statuses read "Course (Status)" instead of "Course · Status".
