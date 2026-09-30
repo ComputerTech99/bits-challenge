@@ -2499,3 +2499,35 @@ test("#49 borderline actions are quiet accent text buttons, underlined on hover 
   await btn.click();
   await expect(cutoffInput(page, "A")).toHaveValue("78");
 });
+
+// ===== #39: link previews =====
+
+test("#39 the page describes itself for link previews", async ({ page }) => {
+  const meta = sel => page.locator(sel).getAttribute("content");
+  expect(await meta('meta[name="description"]')).toMatch(/grade cutoffs/i);
+  expect(await meta('meta[property="og:title"]')).toBe("Grading console");
+  expect(await meta('meta[property="og:description"]')).toBe(await meta('meta[name="description"]'));
+  expect(await meta('meta[property="og:type"]')).toBe("website");
+  expect(await meta('meta[name="twitter:card"]')).toBe("summary_large_image");
+  // Scrapers need an absolute URL; the file itself is the 1200×630 Open Graph size.
+  const image = await meta('meta[property="og:image"]');
+  expect(image).toMatch(/^https:\/\/.+\/assets\/og-image\.png$/);
+  expect(await meta('meta[property="og:image:width"]')).toBe("1200");
+  expect(await meta('meta[property="og:image:height"]')).toBe("630");
+  const png = require("fs").readFileSync(require("path").join(__dirname, "..", "assets", "og-image.png"));
+  expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([1200, 630]); // IHDR width, height
+});
+
+for (const scheme of ["light", "dark"]) {
+  test(`#39 theme-color matches the app bar in the ${scheme} theme`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    const [themeColour, surface] = await page.evaluate(s => {
+      const m = [...document.querySelectorAll('meta[name="theme-color"]')].find(m => matchMedia(m.media).matches);
+      const probe = document.createElement("span"); document.body.append(probe);
+      probe.style.color = m.content; const a = getComputedStyle(probe).color;
+      probe.style.color = "var(--surface)"; const b = getComputedStyle(probe).color;
+      probe.remove(); return [a, b];
+    }, scheme);
+    expect(themeColour).toBe(surface);
+  });
+}

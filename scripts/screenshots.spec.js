@@ -112,3 +112,22 @@ for (const width of WIDTHS) {
     });
   }
 }
+
+// The link-preview image (#39): the loaded demo course, light theme, at the
+// 1200×630 Open Graph size. Run with SHOTS_OG=1; writes assets/og-image.png.
+if (process.env.SHOTS_OG) {
+  test("og-image", async ({ page }) => {
+    await page.setViewportSize({ width: 1200, height: 630 });
+    await page.emulateMedia({ colorScheme: "light" });
+    await openApp(page, { realFonts: true });
+    await page.evaluate(() => document.fonts.ready);
+    await startGrading(page, DEMO, COURSE);
+    await typeCutoff(page, "A", 78);
+    // A preview shows the chart whole: the sticky action bar would cover its x-axis.
+    await page.addStyleTag({ content: ".actionbar{display:none}" });
+    await page.mouse.move(0, 0);
+    await page.evaluate(() => { document.activeElement.blur(); scrollTo(0, 0); });
+    await page.waitForTimeout(700);
+    await page.screenshot({ path: "assets/og-image.png" });
+  });
+}
