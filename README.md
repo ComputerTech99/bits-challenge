@@ -62,11 +62,32 @@ Node is only needed for the dev tooling:
 
 ```sh
 npm install
-npx playwright install chromium
+npx playwright install chromium webkit firefox
 node fixtures/generate.js   # regenerate the .xlsx test fixtures
-npx playwright test         # run the Playwright suite (starts its own server)
+npx playwright test         # run the suite in Chromium, WebKit and Firefox (starts its own server)
+npx playwright test --project=chromium   # one engine only
 ```
 
 Screenshots for the docs are generated with
 `SHOTS_OUT=docs/screenshots/after npx playwright test -c playwright.screenshots.config.js scripts/screenshots.spec.js`
-(add `SHOTS_THEME=dark` for the dark set).
+(add `SHOTS_THEME=dark` for the dark set). `SHOTS_OG=1 … -g og-image` regenerates the
+link-preview image, `assets/og-image.png`.
+
+## Known limitations
+These were considered and deliberately left as they are.
+
+- **The dark colour tokens are declared twice**: once under `:root[data-theme="dark"]`
+  (the Dark choice in the theme menu) and once under
+  `@media (prefers-color-scheme: dark) :root:not([data-theme="light"])` (System).
+  Plain CSS can't share one block between an attribute selector and a media query
+  without a build step or JavaScript. A test compares the two blocks, so they can't drift apart.
+- **Undo history doesn't survive a refresh.** Cutoffs and download status are
+  saved per course and restored when the same file is uploaded again; the undo
+  and redo stacks are not. Undo is for changes within a session, and restoring a
+  history of changes made before a reload would be more surprising than useful.
+- **The longest course status is cut off on a phone.** At 390px, "Introduction to
+  Programming (Changed since download)" is wider than the full-width course
+  select. The native option list shows it in full.
+- **Firefox wasn't run on the development machine.** The suite has a Firefox
+  project, but Playwright 1.63's Firefox build doesn't launch on macOS 27.0, so
+  the recorded results are for Chromium and WebKit.
