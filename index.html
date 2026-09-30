@@ -532,7 +532,19 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .bl-list li{color:var(--ink-muted);cursor:default}
 .bl-list li:hover{color:var(--ink)}
 .bl-list b{color:var(--ink);font-weight:600}
-.bl-action{max-width:100%}
+/* "Lower A to 78 (+3 students)": a quiet text button in the accent (#49). */
+button.bl-action{
+  max-width:100%;
+  height:auto;
+  min-height:32px;
+  padding:4px 0;
+  background:none;
+  border:none;
+  color:var(--accent);
+  text-align:left;
+}
+button.bl-action:is(:hover,:focus-visible):not(:disabled){text-decoration:underline}
+button.bl-action:disabled{color:var(--ink-muted);opacity:1}
 .bl-empty{margin:0;color:var(--ink-muted)}
 .change-count{font-size:14px;color:var(--ink-muted)}
 .change-count b{color:var(--ink);font-weight:600}
@@ -1389,7 +1401,7 @@ function renderBorderline(rows){
     div.innerHTML=`
       <p class="bl-title"><span><b>${k} ${k===1?"student":"students"}</b> ${dist} below ${g} (starts at ${cutoffs[g]})</span></p>
       <ul class="bl-list"></ul>
-      <button type="button" class="secondary bl-action"></button>`;
+      <button type="button" class="bl-action"></button>`;
     const list=div.querySelector("ul");
     students.forEach(d=>{
       const li=document.createElement("li");

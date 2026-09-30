@@ -2453,3 +2453,22 @@ for (const width of [1440, 390]) {
     await expect(stat(page, "Median")).toHaveText("64");
   });
 }
+
+test("#49 borderline actions are quiet accent text buttons, underlined on hover and focus", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  const btn = page.getByRole("button", { name: "Lower A to 78 (+3 students)" });
+  const accent = await tokenColour(page, "--accent");
+  await expect(btn).toHaveCSS("color", accent);
+  await expect(btn).toHaveCSS("border-top-width", "0px");
+  await expect(btn).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(btn).toHaveCSS("text-decoration-line", "none");
+  await btn.hover();
+  await expect(btn).toHaveCSS("text-decoration-line", "underline");
+  await page.mouse.move(0, 0);
+  await btn.focus();
+  await page.keyboard.press("Shift+Tab"); await page.keyboard.press("Tab"); // keyboard focus, for :focus-visible
+  await expect(btn).toBeFocused();
+  await expect(btn).toHaveCSS("text-decoration-line", "underline");
+  await btn.click();
+  await expect(cutoffInput(page, "A")).toHaveValue("78");
+});
