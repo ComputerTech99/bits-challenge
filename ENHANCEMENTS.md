@@ -9,6 +9,7 @@ the end of a trimester:
 | E2 | "Where do my cutoffs fall on this class's distribution?" | The histogram becomes the control surface |
 | E3 | "Which students does moving a cutoff by one mark actually affect?" | Borderline students |
 | E4 | "Am I sure about what I'm about to submit?" | Review before export |
+| E5 | "What if I drag the wrong line?" | Undo, redo and reset where you need them |
 
 All grade calculations go through one function, `gradeFor(mark)`. The counts, the
 distribution table, the chart, the borderline list and the CSV export can't
@@ -262,6 +263,49 @@ still on a boundary. It doesn't block the download on any of them.
 
 ---
 
+## E5: Undo, redo and reset where you need them
+
+**Problem.** Dragging a cutoff makes experimenting easy, and so it is also easy to lose a good
+state: a slip moves A by five marks and there is no way back except remembering the old
+numbers. The only reset was in the bottom bar, far from the chart, and it wiped every cutoff at
+once. So the safe choice was not to experiment at all.
+
+**Solution.**
+- **Undo and Redo** in the header of "Distribution and cutoffs", next to **Reset to defaults**.
+  Ctrl/Cmd+Z and Shift+Ctrl/Cmd+Z do the same. The shortcut is ignored in text fields (the name,
+  and later the search box), which keep their own undo. In a cutoff input the app's undo is the
+  useful one.
+- **Sensible steps:**
+  - A whole drag is one step.
+  - A burst of edits to the same cutoff (−/+ clicks, arrow keys, typing) with under 600ms between
+    them is one step.
+  - "Lower A to 78" and each reset are one step each.
+  - A new change clears the redo trail.
+- **Per course.** The stacks live in each course's state (#31), so undo in one course never
+  touches another.
+- **"Reset to 80" per cutoff.** It sits under a cutoff's range once that cutoff has moved and
+  restores only that one. If the neighbouring cutoffs block the default, the cutoff goes as close
+  as it can and a note says why. Focus moves to the input, because the link hides itself.
+- **Reset notice with Undo.** After "Reset to defaults", an inline notice ("Cutoffs reset to
+  defaults. Undo") appears and focus moves to its Undo. Any other change hides it, because its
+  Undo would then undo something else.
+- The bottom bar keeps only the change counter and "Review grades".
+
+**Why this design.** Undo makes a destructive action cheap, and that is better than asking
+"Are you sure?" first: the confirmation is removed in #35. The history is snapshot-based, and
+every change still goes through `setCutoff()`, so undo can't produce a state the editor couldn't
+produce.
+
+**How tested.** `E5` tests:
+- Undo and redo through two typed changes, with counts that match; a new change clears redo.
+- A drag through six values is one step.
+- Three quick − clicks are one step, and a click after an 800ms pause is a new one.
+- Ctrl/Cmd+Z and Shift+Ctrl/Cmd+Z work, and do nothing to the cutoffs in the name field.
+- The per-cutoff reset affects only that cutoff and can be undone.
+- The reset notice's Undo restores both changed cutoffs, and focus lands on it.
+- Stacks are per course.
+- The bottom bar has only "Review grades".
+
 ## Visual redesign
 
 The four enhancements sit on a new foundation built to the CLAUDE.md design
@@ -365,3 +409,6 @@ rewritten to check the same guarantee through the new UI. None was deleted.
 | #18 (ordinals) | E4 | 23 finalizes through the dialog. |
 | #27b (blocked export clears on re-upload) | E4 | The blocked attempt clicks "Review grades". |
 | setup: collapses to a summary (summary text) | Stage 2B, #33: the summary no longer repeats the instructor, who is shown in the app bar. | The summary reads `demo_marks.xlsx · 148 students · 3 courses`. Collapse, Edit and focus are checked as before. |
+| #19 ×2 (reset asks once / dismiss keeps cutoffs) | E5 moved the button to the chart panel header as "Reset to defaults" (`#resetAll`). | The same guarantees through the new button. |
+| #22 (reset inert before a course) | E5: the button is inside the chart panel, which is hidden until a course is open. | Hidden and disabled on a fresh page and after an upload. A dispatched click causes no error and no dialog. |
+| E1: the action bar counts changes | E5: the reset button left the action bar. | Same counts. The enabled/disabled check now uses `#resetAll`. |

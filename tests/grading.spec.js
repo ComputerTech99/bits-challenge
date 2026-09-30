@@ -367,7 +367,7 @@ test("#19 Reset cutoffs asks for confirmation once", async ({ page }) => {
   await typeCutoff(page, "A", 90);
   const dialogs = [];
   page.on("dialog", d => { dialogs.push(d.message()); d.accept(); });
-  await page.click("#resetRanges");
+  await page.click("#resetAll"); // Stage 2B (E5): "Reset to defaults" in the chart panel header
   await expect(cutoffInput(page, "A")).toHaveValue("80");
   await expect(rangeText(page, "A-")).toHaveText("A-: 70–79");
   expect(dialogs).toHaveLength(1);
@@ -377,7 +377,7 @@ test("#19 dismissing the confirmation leaves the cutoffs alone", async ({ page }
   await startGrading(page, "valid_basic.xlsx", "CS F211");
   await typeCutoff(page, "A", 90);
   page.on("dialog", d => d.dismiss());
-  await page.click("#resetRanges");
+  await page.click("#resetAll");
   await expect(cutoffInput(page, "A")).toHaveValue("90");
 });
 
@@ -402,15 +402,18 @@ test("#21 SheetJS is loaded from the pinned 0.18.5 URL", async ({ page }) => {
 
 test("#22 Reset cutoffs is inert before a course is open", async ({ page }) => {
   // Stage 2: the button is disabled until there are cutoffs to reset.
+  // Stage 2B (E5): it moved into the chart panel, which is hidden until a
+  // course is open; a forced click still must do nothing.
   const errors = [], dialogs = [];
   page.on("pageerror", e => errors.push(e.message));
   page.on("dialog", d => { dialogs.push(d.message()); d.accept(); });
-  await expect(page.locator("#resetRanges")).toBeDisabled();
-  await page.click("#resetRanges", { force: true }); // fresh page
-  await upload(page, "valid_basic.xlsx");            // courses loaded, none selected
+  await expect(page.locator("#resetAll")).toBeHidden();
+  await expect(page.locator("#resetAll")).toBeDisabled();
+  await page.locator("#resetAll").dispatchEvent("click"); // fresh page
+  await upload(page, "valid_basic.xlsx");                 // courses loaded, none selected
   await expect(page.locator("#course option")).toHaveCount(3);
-  await expect(page.locator("#resetRanges")).toBeDisabled();
-  await page.click("#resetRanges", { force: true });
+  await expect(page.locator("#resetAll")).toBeDisabled();
+  await page.locator("#resetAll").dispatchEvent("click");
   await page.waitForTimeout(200);
   expect(errors).toEqual([]);
   expect(dialogs).toEqual([]);
@@ -739,14 +742,14 @@ test("E1: − / + buttons step within bounds and disable at the limit", async ({
 
 test("E1: the action bar counts cutoffs changed from default", async ({ page }) => {
   await startGrading(page, "demo_marks.xlsx", "Introduction to Programming");
-  await expect(page.locator("#resetRanges")).toBeDisabled();
+  await expect(page.locator("#resetAll")).toBeDisabled();
   await typeCutoff(page, "A", 78);
   await expect(page.locator("#changeCount")).toHaveText("1 cutoff changed from default");
   await typeCutoff(page, "B-", 52);
   await expect(page.locator("#changeCount")).toHaveText("2 cutoffs changed from default");
   await typeCutoff(page, "A", 80);
   await expect(page.locator("#changeCount")).toHaveText("1 cutoff changed from default");
-  await expect(page.locator("#resetRanges")).toBeEnabled();
+  await expect(page.locator("#resetAll")).toBeEnabled();
 });
 
 test("golden: modified cutoffs (A 78, B- 52) export byte-identical to Stage 1", async ({ page }) => {
@@ -1287,6 +1290,128 @@ for (const [file, courseName] of [["demo_marks.xlsx", INTRO], ["large_class.xlsx
     if (g.curve.length) expect(Math.min(...g.curve.map(([, y]) => y))).toBeGreaterThan(g.plotTop + 1);
   });
 }
+
+// ===== E5: undo, redo and reset =====
+
+function stepButton(page, grade, dir) {
+  return page.locator(".cutoff-row", { has: cutoffInput(page, grade) }).locator(`.step[data-step="${dir}"]`);
+}
+
+test("E5: undo and redo step back and forward through cutoff changes", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await expect(page.locator("#undoBtn")).toBeDisabled();
+  await expect(page.locator("#redoBtn")).toBeDisabled();
+  await typeCutoff(page, "A", 78);
+  await typeCutoff(page, "B-", 52);
+  await page.click("#undoBtn");
+  await expect(cutoffInput(page, "B-")).toHaveValue("50");
+  await expect(cutoffInput(page, "A")).toHaveValue("78");
+  await page.click("#undoBtn");
+  await expect(cutoffInput(page, "A")).toHaveValue("80");
+  await expect(page.locator("#undoBtn")).toBeDisabled();
+  await page.click("#redoBtn");
+  await expect(cutoffInput(page, "A")).toHaveValue("78");
+  expect((await gradeCounts(page)).A).toBe(introMarks().filter(m => m >= 78).length);
+  // A new change after an undo discards what could have been redone.
+  await page.click("#undoBtn");
+  await typeCutoff(page, "C", 42);
+  await expect(page.locator("#redoBtn")).toBeDisabled();
+});
+
+test("E5: a whole drag is one undo step", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await dragHandle(page, "A", 74); // passes through 79, 78, … 74
+  await expect(cutoffInput(page, "A")).toHaveValue("74");
+  await page.click("#undoBtn");
+  await expect(cutoffInput(page, "A")).toHaveValue("80");
+  await expect(page.locator("#undoBtn")).toBeDisabled();
+});
+
+test("E5: a quick burst of − clicks is one step; a pause starts a new one", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  const lower = stepButton(page, "A", -1);
+  for (let i = 0; i < 3; i++) await lower.click();
+  await expect(cutoffInput(page, "A")).toHaveValue("77");
+  await page.waitForTimeout(800);
+  await lower.click();
+  await expect(cutoffInput(page, "A")).toHaveValue("76");
+  await page.click("#undoBtn");
+  await expect(cutoffInput(page, "A")).toHaveValue("77");
+  await page.click("#undoBtn");
+  await expect(cutoffInput(page, "A")).toHaveValue("80");
+});
+
+test("E5: Ctrl/Cmd+Z undoes and Shift+Ctrl/Cmd+Z redoes, but not while typing a name", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await typeCutoff(page, "A", 78);
+  await page.locator("#hist").focus();
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(cutoffInput(page, "A")).toHaveValue("80");
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect(cutoffInput(page, "A")).toHaveValue("78");
+  // In the name field the shortcut belongs to the text, not the cutoffs.
+  await setInstructor(page, "Dr Rao Singh");
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(cutoffInput(page, "A")).toHaveValue("78");
+});
+
+test("E5: each changed cutoff offers 'Reset to <default>' for just that cutoff", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await expect(page.locator(".cutoff-reset:visible")).toHaveCount(0);
+  await typeCutoff(page, "A", 78);
+  await typeCutoff(page, "B-", 52);
+  const resetA = page.locator('.cutoff-reset[data-grade="A"]');
+  await expect(resetA).toHaveText("Reset to 80");
+  await expect(page.locator(".cutoff-reset:visible")).toHaveCount(2);
+  await resetA.click();
+  await expect(cutoffInput(page, "A")).toHaveValue("80");
+  await expect(cutoffInput(page, "B-")).toHaveValue("52"); // only that one
+  await expect(resetA).toBeHidden();
+  await page.click("#undoBtn");
+  await expect(cutoffInput(page, "A")).toHaveValue("78");
+});
+
+test("E5: after 'Reset to defaults' an inline notice offers Undo", async ({ page }) => {
+  page.on("dialog", d => d.accept());
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await typeCutoff(page, "A", 78);
+  await typeCutoff(page, "B-", 52);
+  await page.click("#resetAll");
+  await expect(cutoffInput(page, "A")).toHaveValue("80");
+  const notice = page.locator("#resetNotice");
+  await expect(notice).toBeVisible();
+  await expect(notice).toContainText("Cutoffs reset to defaults.");
+  await expect(notice.getByRole("button", { name: "Undo" })).toBeFocused(); // not lost to <body>
+  await notice.getByRole("button", { name: "Undo" }).click();
+  await expect(cutoffInput(page, "A")).toHaveValue("78");
+  await expect(cutoffInput(page, "B-")).toHaveValue("52");
+  await expect(notice).toBeHidden();
+});
+
+test("E5: undo history belongs to each course", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await typeCutoff(page, "A", 78);
+  await page.selectOption("#course", "Linear Algebra");
+  await expect(page.locator("#undoBtn")).toBeDisabled(); // nothing done here yet
+  await typeCutoff(page, "B", 62);
+  await page.selectOption("#course", INTRO);
+  await page.click("#undoBtn");
+  await expect(cutoffInput(page, "A")).toHaveValue("80");
+  await page.selectOption("#course", "Linear Algebra");
+  await expect(cutoffInput(page, "B")).toHaveValue("62");
+  await page.click("#undoBtn");
+  await expect(cutoffInput(page, "B")).toHaveValue("60");
+});
+
+test("E5: the bottom bar keeps the change count and Review grades only", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await expect(page.locator(".actionbar button")).toHaveText(["Review grades"]);
+  await expect(page.locator("#changeCount")).toHaveText("Default cutoffs");
+  const head = page.locator(".panel-head");
+  await expect(head.getByRole("button", { name: "Undo" })).toBeVisible();
+  await expect(head.getByRole("button", { name: "Redo" })).toBeVisible();
+  await expect(head.getByRole("button", { name: "Reset to defaults" })).toBeVisible();
+});
 
 test.describe("#32 touch at 390px", () => {
   test.use({ viewport: { width: 390, height: 700 }, hasTouch: true, isMobile: true });

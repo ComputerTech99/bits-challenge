@@ -92,8 +92,21 @@ h2{font-size:16px}
   min-width:0;
 }
 .panel > h2{margin-bottom:12px}
-.panel > h2:has(+ .chart-help){margin-bottom:4px}
-.chart-help{margin-bottom:12px}
+/* Panel header: title and help on the left, tools on the right (wraps when narrow). */
+.panel-head{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:8px 16px;margin-bottom:12px}
+.panel-head .help{margin-top:4px}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px}
+.reset-notice{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin:0 0 12px;
+  padding:8px 12px;
+  border:1px solid var(--rule);
+  border-radius:var(--radius-control);
+  background:var(--canvas);
+}
+.reset-notice[hidden]{display:none}
 .workspace{
   display:grid;
   grid-template-columns:minmax(0,1fr) 320px;
@@ -285,6 +298,10 @@ button:disabled{opacity:.45;cursor:not-allowed}
 }
 .cutoff-row label,.cutoff-row .fixed-label{display:flex;align-items:center;gap:6px;white-space:nowrap;font-weight:500}
 .cutoff-row .range{color:var(--ink-muted);white-space:nowrap}
+/* The derived range, with "Reset to 80" under it once the cutoff has moved. */
+.range-cell{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;line-height:1.3;min-width:0}
+.cutoff-reset{font-size:12px}
+.cutoff-reset[hidden]{display:none}
 .stepper{display:flex;align-items:center;gap:4px}
 .stepper input{width:56px;text-align:center;padding:0 4px;-moz-appearance:textfield}
 .stepper input::-webkit-inner-spin-button,.stepper input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
@@ -483,8 +500,19 @@ body.grading .empty-state{display:none}
 
 <div class="workspace">
   <section class="panel" aria-labelledby="analysisHeading">
-    <h2 id="analysisHeading">Distribution and cutoffs</h2>
-    <p class="help chart-help" id="chartHelp">Drag a line or use the controls below to move a cutoff.</p>
+    <div class="panel-head">
+      <div>
+        <h2 id="analysisHeading">Distribution and cutoffs</h2>
+        <p class="help" id="chartHelp">Drag a line or use the controls below to move a cutoff.</p>
+      </div>
+      <div class="toolbar" role="group" aria-label="Cutoff changes">
+        <button type="button" class="secondary" id="undoBtn" disabled>Undo</button>
+        <button type="button" class="secondary" id="redoBtn" disabled>Redo</button>
+        <button type="button" class="secondary" id="resetAll" disabled>Reset to defaults</button>
+      </div>
+    </div>
+    <p class="reset-notice" id="resetNotice" role="status" hidden><span>Cutoffs reset to defaults.</span>
+      <button type="button" class="link" id="resetUndo">Undo</button></p>
     <div class="chart" id="chartBox">
       <svg id="hist" tabindex="0" role="img"
         aria-label="Histogram of marks with grade bands. Use the left and right arrow keys to read the number of students at each mark."
@@ -567,7 +595,6 @@ body.grading .empty-state{display:none}
       <div id="thankyou" class="notice" role="status"></div>
     </div>
     <div class="actions">
-      <button class="secondary" id="resetRanges" disabled>Reset cutoffs</button>
       <button id="reviewBtn" disabled>Review grades</button>
     </div>
   </div>
@@ -615,7 +642,7 @@ let data=[];
 let cutoffs={...DEFAULT_CUTOFFS}; // the open course's cutoffs: the one source of truth for grading
 // Per-course state for the life of the loaded file: switching course and back
 // keeps that course's cutoffs. A new upload starts a fresh map.
-let courseState=new Map(); // course name -> { cutoffs }
+let courseState=new Map(); // course name -> { cutoffs, undo, redo }
 let previousCounts=null;          // last announced counts (null = nothing to compare)
 let finalizeCount = 0;
 
@@ -657,7 +684,7 @@ function courseRows(){ return data.filter(d=>d.Course===course.value); }
 
 // A course's saved state, created with the default cutoffs on first visit.
 function stateFor(name){
-  if(!courseState.has(name)) courseState.set(name,{cutoffs:{...DEFAULT_CUTOFFS}});
+  if(!courseState.has(name)) courseState.set(name,{cutoffs:{...DEFAULT_CUTOFFS},undo:[],redo:[]});
   return courseState.get(name);
 }
 
@@ -677,7 +704,9 @@ function resetGradingView(){
   borderline.innerHTML="";
   liveRegion.textContent="";
   changeCount.textContent="";
-  resetRanges.disabled=true;
+  [undoBtn,redoBtn,resetAll].forEach(b=>b.disabled=true);
+  resetNotice.hidden=true;
+  burst={key:null,at:0};
   setup.classList.remove("collapsed"); // no course open: show the full setup
   ["min","max","avg","med","std"].forEach(id=>document.getElementById(id).textContent="—");
   clearChart();
@@ -882,23 +911,33 @@ function buildCutoffEditor(){
         <input id="${id}" type="number" inputmode="numeric" step="1">
         <button type="button" class="step" data-step="1" tabindex="-1" aria-label="Raise the ${g} cutoff by 1">+</button>
       </div>
-      <span class="range num" id="range-${g.replace("-","m")}"></span>`;
+      <div class="range-cell">
+        <span class="range num" id="range-${g.replace("-","m")}"></span>
+        <button type="button" class="link cutoff-reset" data-grade="${g}" hidden>Reset to ${DEFAULT_CUTOFFS[g]}</button>
+      </div>`;
     const input=row.querySelector("input");
+    // A run of −/+ clicks or arrow/typed edits on one cutoff is one undo step.
     row.querySelectorAll(".step").forEach(b=>{
-      b.onclick=()=>setCutoff(g,cutoffs[g]+Number(b.dataset.step));
+      b.onclick=()=>userSetCutoff(g,cutoffs[g]+Number(b.dataset.step),"step "+g);
     });
     // Arrow keys and valid typing apply immediately; anything else waits for blur.
     input.addEventListener("input",()=>{
       const v=Number(input.value), [lo,hi]=cutoffBounds(g);
-      if(input.value!=="" && Number.isInteger(v) && v>=lo && v<=hi && v!==cutoffs[g]) setCutoff(g,v);
+      if(input.value!=="" && Number.isInteger(v) && v>=lo && v<=hi && v!==cutoffs[g]) userSetCutoff(g,v,"type "+g);
     });
     // On blur/Enter: clamp out-of-range or non-numbers and say what happened.
     input.addEventListener("change",()=>{
       const v=Number(input.value), [lo,hi]=cutoffBounds(g);
-      if(input.value!=="" && Number.isInteger(v) && v>=lo && v<=hi){ setCutoff(g,v); return; }
-      const used=setCutoff(g,Number.isFinite(v) && input.value!=="" ? v : cutoffs[g]);
+      if(input.value!=="" && Number.isInteger(v) && v>=lo && v<=hi){ userSetCutoff(g,v,"type "+g); return; }
+      const used=userSetCutoff(g,Number.isFinite(v) && input.value!=="" ? v : cutoffs[g],"type "+g);
       showCutoffNote(`${g} must start between ${lo} and ${hi}, so it was set to ${used}.`);
     });
+    // Restores just this cutoff. The link hides itself, so focus goes to the input.
+    row.querySelector(".cutoff-reset").onclick=()=>{
+      const target=DEFAULT_CUTOFFS[g], used=userSetCutoff(g,target);
+      if(used!==target) showCutoffNote(`${g} can't go back to ${target} while its neighbouring cutoffs are where they are, so it was set to ${used}.`);
+      input.focus();
+    };
     grades.appendChild(row);
   });
   const e=document.createElement("div");
@@ -922,6 +961,7 @@ function updateCutoffEditor(){
     const input=document.getElementById("cut-"+key);
     if(document.activeElement!==input || Number(input.value)!==cutoffs[g]) input.value=cutoffs[g];
     input.min=lo; input.max=hi;
+    input.closest(".cutoff-row").querySelector(".cutoff-reset").hidden=cutoffs[g]===DEFAULT_CUTOFFS[g];
     const [down,up]=input.parentElement.querySelectorAll(".step");
     down.disabled=cutoffs[g]<=lo;
     up.disabled=cutoffs[g]>=hi;
@@ -964,7 +1004,7 @@ function renderDistribution(counts,total,tbody=gradeSummary){
 function updateChangeCount(){
   const n=CUTOFF_GRADES.filter(g=>cutoffs[g]!==DEFAULT_CUTOFFS[g]).length;
   changeCount.innerHTML=n ? `<b>${n}</b> ${n===1?"cutoff":"cutoffs"} changed from default` : "Default cutoffs";
-  resetRanges.disabled=n===0;
+  resetAll.disabled=n===0;
 }
 
 // Borderline students: for each cutoff, those in the grade just below it who
@@ -1028,7 +1068,7 @@ function renderBorderline(rows){
       btn.setAttribute("aria-describedby",why.id);
       div.appendChild(why);
     }
-    btn.onclick=()=>setCutoff(g,to);
+    btn.onclick=()=>userSetCutoff(g,to);
     borderline.appendChild(div);
   });
 }
@@ -1047,14 +1087,76 @@ function render(){
   updateChartSummary(rows,counts);
   computeStats();
   updateChangeCount();
+  updateHistoryButtons();
 }
 
-resetRanges.onclick=()=>{
+// ===== UNDO, REDO AND RESET (E5) =====
+// Each course keeps two stacks of cutoff snapshots. Every change a user makes
+// goes through userSetCutoff() or recordChange(), which push the state from
+// before the change. A drag is one step; so is a burst of edits to the same
+// cutoff (−/+ clicks, arrow keys, typing) with under BURST_MS between them.
+const BURST_MS=600;
+let burst={key:null,at:0}; // the burst in progress, if any
+
+function userSetCutoff(g,value,burstKey=null){
+  const before={...cutoffs};
+  const used=setCutoff(g,value);
+  recordChange(before,burstKey);
+  return used;
+}
+
+function recordChange(before,burstKey=null){
+  if(CUTOFF_GRADES.every(g=>before[g]===cutoffs[g])) return; // nothing moved
+  const st=stateFor(course.value), now=Date.now();
+  const sameBurst=burstKey!==null && burst.key===burstKey && now-burst.at<BURST_MS;
+  if(!sameBurst) st.undo.push(before); // mid-burst, the step already holds the start
+  st.redo=[];                          // a new change ends the redo trail
+  burst={key:burstKey,at:now};
+  resetNotice.hidden=true;             // its Undo would now undo something else
+  updateHistoryButtons();
+}
+
+function updateHistoryButtons(){
+  const st=courseState.get(course.value);
+  undoBtn.disabled=!st || !st.undo.length;
+  redoBtn.disabled=!st || !st.redo.length;
+}
+
+// Moves one snapshot from `from` to the cutoffs, saving the current ones on `to`.
+function travel(from,to){
+  if(!from.length) return;
+  to.push({...cutoffs});
+  Object.assign(cutoffs,from.pop()); // in place: `cutoffs` is the course's saved object
+  burst={key:null,at:0};
+  resetNotice.hidden=true;
+  render();
+}
+function undo(){ const st=stateFor(course.value); travel(st.undo,st.redo); }
+function redo(){ const st=stateFor(course.value); travel(st.redo,st.undo); }
+undoBtn.onclick=undo;
+redoBtn.onclick=redo;
+resetUndo.onclick=undo;
+
+resetAll.onclick=()=>{
   if(!grades.children.length) return; // no course open yet, so no cutoffs to reset
   if(!confirm("Reset all grade cutoffs to the defaults (A 80, A- 70, B 60, B- 50, C 40, C- 30, D 20)?")) return;
-  Object.assign(cutoffs,DEFAULT_CUTOFFS); // in place: `cutoffs` is the course's saved object
+  const before={...cutoffs};
+  Object.assign(cutoffs,DEFAULT_CUTOFFS);
   render();
+  recordChange(before);
+  resetNotice.hidden=false; // after recordChange, which hides it
+  resetUndo.focus();        // the reset button is now disabled, so focus moves here
 };
+
+// Ctrl/Cmd+Z and Shift+Ctrl/Cmd+Z. Text fields (the name, the search) keep
+// their own undo; in a cutoff input the app's undo is the useful one.
+document.addEventListener("keydown",e=>{
+  if(!(e.ctrlKey || e.metaKey) || e.altKey || e.key.toLowerCase()!=="z") return;
+  if(!document.body.classList.contains("grading") || reviewDialog.open) return;
+  if(e.target.matches("textarea, input:not([type=number])")) return;
+  e.preventDefault();
+  if(e.shiftKey) redo(); else undo();
+});
 
 // ===== HISTOGRAM (inline SVG) =====
 // One bar per mark 0–100, coloured by gradeFor(mark), with grade bands behind
@@ -1287,12 +1389,14 @@ function startDrag(e,g,handle){
   hideMarkTooltip();
   // Grabbing the strip off-centre must not make the cutoff jump to the pointer.
   const offset=boundaryAt(e.clientX)-cutoffs[g];
+  const before={...cutoffs}; // the whole drag is one undo step
   const move=ev=>{
     const mark=boundaryAt(ev.clientX)-offset;
     if(mark!==cutoffs[g]) setCutoff(g,mark);
   };
   const end=()=>{
     handle.classList.remove("dragging");
+    recordChange(before);
     handle.removeEventListener("pointermove",move);
     handle.removeEventListener("pointerup",end);
     handle.removeEventListener("pointercancel",end);
