@@ -11,6 +11,7 @@ the end of a trimester:
 | E4 | "Am I sure about what I'm about to submit?" | Review before export |
 | E5 | "What if I drag the wrong line?" | Undo, redo and reset where you need them |
 | E6 | "Which of my courses are done, and will a refresh lose my work?" | Per-course progress and autosave |
+| E7 | "A student asks: what did I get?" | Find a student |
 
 All grade calculations go through one function, `gradeFor(mark)`. The counts, the
 distribution table, the chart, the borderline list and the CSV export can't
@@ -343,6 +344,41 @@ so it can never contradict what's on screen.
 - The stored JSON contains no BITS ID from the file and only grade-to-cutoff maps; an untouched
   file stores nothing.
 - With a `localStorage` getter that throws, grading and download still work with no page errors.
+
+## E7: Find a student
+
+**Problem.** While grading, instructors get "what did I get?" and "am I near the cutoff?"
+questions. Answering one meant scanning the chart or opening the spreadsheet in another window.
+
+**Solution.**
+- A "Find a student" field under the header of "Distribution and cutoffs".
+- Typing a BITS ID shows each match as "20247096 · 79 · A-", with the grade chip.
+  - Matching is trimmed and case-insensitive (`2023a7ps0002p` finds `2023A7PS0002P`).
+  - From 4 characters any part of the ID matches. Below that only an exact ID does, with the hint
+    "Type at least 4 characters of the BITS ID."
+- Up to 5 matches are listed, the exact match first, then "and N more. Type more of the ID to
+  narrow it down."
+- No match says "No student with that ID in Introduction to Programming."
+- Every matching student's bar is highlighted and the rest dim. This shares one highlight
+  function with the borderline list's hover, so leaving a borderline name brings the search
+  highlight back.
+- The shown grade follows the cutoffs as they change, because the result is recomputed through
+  `gradeFor()` on every render.
+- Results are in an `aria-live` region. Ctrl/Cmd+Z in the field is the field's own undo, not the
+  cutoffs'.
+
+**Why this design.** It answers the question where the instructor is already looking (the chart
+of the course they're grading), and shows the grade under the current cutoffs, which is what
+the student will get.
+
+**How tested.** `E7` tests:
+- An exact ID shows mark and grade and highlights bar 79.
+- Moving A to 79 updates the listed grade to A.
+- Clearing the field removes the results and the highlight.
+- Trimmed, case-insensitive and partial matching, and the under-4 hint.
+- A 10-match search lists 5 plus "and 5 more", and highlights every matching mark.
+- An unknown ID, or an ID that is only in another course, gives the "No student…" line naming
+  the course.
 
 ## Visual redesign
 

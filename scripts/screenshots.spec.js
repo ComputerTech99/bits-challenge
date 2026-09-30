@@ -50,6 +50,11 @@ const STATES = {
     await startGrading(page, DEMO, COURSE);
     await page.waitForTimeout(700);
   },
+  search: async page => {
+    await startGrading(page, DEMO, COURSE);
+    await page.waitForTimeout(700);
+    await page.fill("#findId", "20247");
+  },
   "cutoff-moved": async page => {
     await startGrading(page, DEMO, COURSE);
     await typeCutoff(page, "A", 78);

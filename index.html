@@ -96,6 +96,16 @@ h2{font-size:16px}
 .panel-head{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:8px 16px;margin-bottom:12px}
 .panel-head .help{margin-top:4px}
 .toolbar{display:flex;flex-wrap:wrap;gap:8px}
+/* Search row: the field, then its results inline (wrapping under it when narrow). */
+.find-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin-bottom:12px}
+.find{display:flex;align-items:center;gap:8px}
+.find input{width:176px}
+.find-results{display:flex;flex-wrap:wrap;align-items:center;gap:4px 16px;min-width:0}
+.find-results:empty{display:none}
+.find-results ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:4px 16px}
+.find-results li{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.find-results li b{font-weight:600}
+.find-results p{margin:0;color:var(--ink-muted)}
 .inline-notice{
   display:flex;
   align-items:center;
@@ -514,6 +524,13 @@ body.grading .empty-state{display:none}
         <button type="button" class="secondary" id="resetAll" disabled>Reset to defaults</button>
       </div>
     </div>
+    <div class="find-row">
+      <div class="find">
+        <label for="findId">Find a student</label>
+        <input type="search" id="findId" placeholder="BITS ID" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="find-results" id="findResults" aria-live="polite"></div>
+    </div>
     <p class="inline-notice" id="resetNotice" role="status" hidden><span>Cutoffs reset to defaults.</span>
       <button type="button" class="link" id="resetUndo">Undo</button></p>
     <div class="chart" id="chartBox">
@@ -731,6 +748,9 @@ function resetGradingView(){
   [undoBtn,redoBtn,resetAll].forEach(b=>b.disabled=true);
   resetNotice.hidden=true;
   burst={key:null,at:0};
+  findResults.innerHTML="";
+  searchMarks=[];
+  hoverMark=null;
   setup.classList.remove("collapsed"); // no course open: show the full setup
   ["min","max","avg","med","std"].forEach(id=>document.getElementById(id).textContent="—");
   clearChart();
@@ -1118,6 +1138,7 @@ function render(){
   updateHistoryButtons();
   updateProgress();
   saveProgress();
+  updateFind(); // a found student's grade follows the cutoffs
 }
 
 // ===== UNDO, REDO AND RESET (E5) =====
@@ -1370,6 +1391,7 @@ function updateChart(){
     chart.defaults[g].style.display=cutoffs[g]===DEFAULT_CUTOFFS[g] ? "none" : "";
   });
   layoutPills();
+  applyHighlight();
 }
 
 // Places each handle's pill on its line near the top of the plot. Pills that
@@ -1478,12 +1500,55 @@ hist.addEventListener("keydown",e=>{
   showMarkTooltip(focusMark);
 });
 
-// Outlines one mark's bar (used by the borderline list).
+// Highlighted bars dim the rest. Hovering a borderline student shows their
+// mark; otherwise the marks of the students found by the search (E7) stay lit.
+let hoverMark=null;  // mark under the pointer in the borderline list
+let searchMarks=[];  // marks of the students the search found
 function highlightMark(mark){
-  if(!chart) return;
-  hist.classList.toggle("has-highlight",mark!==null);
-  chart.bars.forEach((bar,i)=>{ if(bar) bar.classList.toggle("highlight",i===mark); });
+  hoverMark=mark;
+  applyHighlight();
 }
+function applyHighlight(){
+  if(!chart) return;
+  const lit=new Set(hoverMark!==null ? [hoverMark] : searchMarks);
+  hist.classList.toggle("has-highlight",lit.size>0);
+  chart.bars.forEach((bar,i)=>{ if(bar) bar.classList.toggle("highlight",lit.has(i)); });
+}
+
+// ===== FIND A STUDENT (E7) =====
+// Answers "what did I get?": IDs are compared trimmed and case-insensitively.
+// From 4 characters any part of an ID matches; shorter only matches exactly.
+const FIND_SHOWN=5, FIND_MIN=4;
+function updateFind(){
+  const q=findId.value.trim().toLowerCase();
+  findResults.innerHTML="";
+  searchMarks=[];
+  if(q && document.body.classList.contains("grading")){
+    const idOf=d=>String(d["BITS ID"]).trim().toLowerCase();
+    const matches=courseRows()
+      .filter(d=>q.length>=FIND_MIN ? idOf(d).includes(q) : idOf(d)===q)
+      .sort((a,b)=>(idOf(a)===q ? 0 : 1)-(idOf(b)===q ? 0 : 1)); // exact match first
+    searchMarks=matches.map(d=>d["Total Marks"]);
+    const say=text=>{ const p=document.createElement("p"); p.textContent=text; findResults.appendChild(p); };
+    if(!matches.length){
+      say(q.length<FIND_MIN ? "Type at least 4 characters of the BITS ID." : `No student with that ID in ${course.value}.`);
+    }else{
+      const ul=document.createElement("ul");
+      matches.slice(0,FIND_SHOWN).forEach(d=>{
+        const g=gradeFor(d["Total Marks"]);
+        const li=document.createElement("li");
+        li.innerHTML=`<span></span> · <b class="num">${d["Total Marks"]}</b> · <span class="chip ${gradeClass(g)}">${g}</span>`;
+        li.firstChild.textContent=d["BITS ID"]; // IDs come from the file: never as HTML
+        ul.appendChild(li);
+      });
+      findResults.appendChild(ul);
+      const more=matches.length-FIND_SHOWN;
+      if(more>0) say(`and ${more} more. Type more of the ID to narrow it down.`);
+    }
+  }
+  applyHighlight();
+}
+findId.addEventListener("input",updateFind);
 
 // Screen-reader summary of the distribution.
 function updateChartSummary(rows,counts){

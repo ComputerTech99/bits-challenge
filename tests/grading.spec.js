@@ -1535,6 +1535,64 @@ test("E6: everything still works when storage is blocked", async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+// ===== E7: find a student =====
+
+async function findStudent(page, text) {
+  await page.fill("#findId", text);
+}
+const results = page => page.locator("#findResults");
+
+test("E7: an exact ID shows the student's mark and current grade and highlights their bar", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await expect(page.getByLabel("Find a student")).toBeVisible();
+  await findStudent(page, "20247096");
+  await expect(results(page).locator("li")).toHaveText(["20247096 · 79 · A-"]);
+  await expect(page.locator("#hist")).toHaveClass(/has-highlight/);
+  await expect(page.locator('#hist rect.bar[data-mark="79"]')).toHaveClass(/highlight/);
+  // The grade follows the cutoffs.
+  await typeCutoff(page, "A", 79);
+  await expect(results(page).locator("li")).toHaveText(["20247096 · 79 · A"]);
+  // Clearing the field clears the result and the highlight.
+  await findStudent(page, "");
+  await expect(results(page)).toBeEmpty();
+  await expect(page.locator("#hist")).not.toHaveClass(/has-highlight/);
+});
+
+test("E7: matching is trimmed, case-insensitive and partial from 4 characters", async ({ page }) => {
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
+  await findStudent(page, "  2023a7ps0002p ");
+  await expect(results(page).locator("li")).toHaveText(["2023A7PS0002P · 19 · E"]);
+  await findStudent(page, "ps0002");
+  await expect(results(page).locator("li")).toHaveText(["2023A7PS0002P · 19 · E"]);
+  await findStudent(page, "002");
+  await expect(results(page)).toHaveText("Type at least 4 characters of the BITS ID.");
+});
+
+test("E7: several matches list the first 5 and say how many more", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await findStudent(page, "20247");
+  await expect(results(page).locator("li")).toHaveCount(5);
+  await expect(results(page)).toContainText("and 5 more. Type more of the ID to narrow it down.");
+  // Every match is highlighted, not just the ones listed.
+  const marks = XLSX.utils.sheet_to_json(XLSX.readFile(fixture("demo_marks.xlsx")).Sheets.Marks)
+    .filter(r => r.Course === INTRO && String(r["BITS ID"]).startsWith("20247")).map(r => String(r["Total Marks"]));
+  const lit = await page.locator("#hist rect.bar.highlight").evaluateAll(b => b.map(x => x.dataset.mark));
+  expect(lit.sort()).toEqual([...new Set(marks)].sort());
+});
+
+test("E7: no match says so, naming the course", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  await findStudent(page, "99999999");
+  await expect(results(page)).toHaveText(`No student with that ID in ${INTRO}.`);
+  await expect(results(page)).toHaveAttribute("aria-live", "polite");
+  // A student who is only in another course isn't found here.
+  const rows = XLSX.utils.sheet_to_json(XLSX.readFile(fixture("demo_marks.xlsx")).Sheets.Marks);
+  const introIds = new Set(rows.filter(r => r.Course === INTRO).map(r => String(r["BITS ID"])));
+  const other = rows.find(r => r.Course === "Linear Algebra" && !introIds.has(String(r["BITS ID"])));
+  await findStudent(page, String(other["BITS ID"]));
+  await expect(results(page)).toHaveText(`No student with that ID in ${INTRO}.`);
+});
+
 test.describe("#32 touch at 390px", () => {
   test.use({ viewport: { width: 390, height: 700 }, hasTouch: true, isMobile: true });
 
