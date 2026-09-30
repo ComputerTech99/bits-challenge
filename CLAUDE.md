@@ -8,7 +8,8 @@ distribution, and exports final grades as CSV. It is NOT a real BITS tool;
 it is a prototype built for this challenge.
 
 The challenge has three stages:
-1. **Debug**: done. See BUG_FIX_LOG.md (#1–#30), tagged `stage-1-complete`.
+1. **Debug**: done. See BUG_FIX_LOG.md (#1–#30), tagged `stage-1-complete`
+   (#31–#35 came from the Stage 2B review).
 2. **Reimagine**: at least 3 meaningful enhancements that solve real
    instructor problems ("more features ≠ better product").
 3. **Deploy**: publicly usable on GitHub Pages.
@@ -49,6 +50,17 @@ technical execution, deployment.
 - Duplicate BITS IDs within a course are rejected; the same ID across courses is fine.
 - The timer, attempt count and completion message are per course. The timer
   stays (it is original functionality) but is visually secondary.
+- **Per-course state:** each course keeps its own cutoffs, undo/redo history and
+  download status for the life of the loaded file (`courseState`); switching
+  course and back restores them, and a new upload clears them. The timer and
+  attempt count still reset on every course switch.
+- **Autosave** stores only cutoffs and download status per course (keyed by file
+  name + a fingerprint of the course list) and the theme, never marks or BITS IDs.
+  Uploading the same file restores it with a "Start over" option. All storage
+  access is wrapped in try/catch.
+- A course is "Downloaded" while its cutoffs match the last download; changing
+  them afterwards makes it "In progress" again.
+- Reset never asks for confirmation; it is one undo step with an inline Undo.
 - **The CSV export format does not change**: same header block, same columns,
   same grade labels, BOM, formula-injection guard and filename pattern.
 - Invalid input is reported inline with specific, row-level messages. Never use `alert()`.

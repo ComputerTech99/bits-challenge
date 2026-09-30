@@ -67,7 +67,7 @@ Serve with `npx serve .`, open the printed URL in Chrome, and enter an instructo
 
 | Item | Why it was left alone |
 |---|---|
-| Re-selecting the *same* file (e.g. after fixing it in Excel) may not fire `change`, because the input's value hasn't changed. | Not reproducible in automation (Playwright always dispatches `change`), so not logged as a bug. The usual fix (clearing `file.value`) would also blank the displayed file name, which changes the Stage 1 look. |
+| Re-selecting the *same* file (e.g. after fixing it in Excel) may not fire `change`, because the input's value hasn't changed. | Behaviour of the file input, left as it is. **Correction (Stage 2B):** this row originally said the case can't be reproduced in automation because Playwright always dispatches `change`. That was wrong: while writing `#31b`, setting the identical file twice fired no `change` in Chromium under Playwright. The tests now load a different file in between. With E6, uploading the same file after a refresh restores its saved cutoffs. |
 | Switching course rebuilds the grade cards with the default ranges, discarding custom ranges for the previous course. | Ranges are plausibly meant to be per course. Changing this is a feature decision (Stage 2). **Fixed in Stage 2B as #31.** |
 | Choosing a course without an instructor name uses `alert()`. | The inline-error rule in CLAUDE.md covers invalid uploads. Kept the original behaviour and copy. |
 | The welcome banner keeps the name entered at course selection even if the name is edited later (the CSV uses the current name). | Cosmetic. The export is correct. |

@@ -88,3 +88,65 @@ borderline action rule, how to handle the lift/pulse tests, and the
 **Human review**
 I reviewed every change in this session (code, tests, fixtures, screenshots and
 documentation) before accepting it.
+
+## 2026-09-29 to 2026-09-30: Stage 2B (fixes from review + E5–E9), Claude Code (Claude Opus 5.5)
+
+I gave Claude Code a review-driven brief:
+- 4 bugs
+- 4 chart follow-ups
+- features E5–E9
+- final checks
+
+It explored the code in plan mode, wrote a plan listing the decisions CLAUDE.md didn't cover, and
+waited for my approval before changing anything.
+
+**What Claude Code did**
+- **Bugs #31–#35, one `fix:` commit each.**
+  - Each bug got a failing test first, run against the previous commit's `index.html` (served from
+    a scratch folder) to prove it reproduced.
+  - #31: cutoffs kept per course.
+  - #32: wider, touch-safe drag handles. A touch test showed CSS `touch-action` alone didn't stop
+    Chromium scrolling mid-drag, so a scoped `touchstart` guard was added and shown to be needed.
+  - #33: context shown once, in the app bar.
+  - #34: y-axis headroom.
+  - #35: reset without `confirm()`, after undo existed.
+- **Chart follow-ups.**
+  - Labelled handle pills that stagger when crowded.
+  - Default-position markers.
+  - The per-letter colour system: the proposed A-, B- and C- failed WCAG checks, so their
+    lightness was tuned and the values recorded in CLAUDE.md.
+- **E5–E9, one `feat:` commit each,** each with its ENHANCEMENTS.md entry and tests:
+  - E5: undo, redo and reset
+  - E6: progress and autosave, never marks or IDs
+  - E7: find a student
+  - E8: dark mode through tokens only
+  - E9: impact list and grading time in the review
+- **Checks.**
+  - Screenshots at 1440 and 390 after every visual change, looked at and fixed. For example, the
+    search results first stacked five lines above the chart and were reflowed inline.
+  - A keyboard-only walkthrough test and touch emulation at 390px.
+  - The Stage 1 ground-truth and golden CSV tests pass unchanged.
+- **Tests:** 94 → 144. Each Stage 1/2 test changed by this work is listed in ENHANCEMENTS.md
+  under "tests rewritten". None was deleted.
+
+**Where the AI got things wrong, and how that was caught**
+- **A factual error in the Stage 1 log.** The first #31 test re-uploaded the identical file and
+  failed, because no `change` event fires for the same file. That showed the log's claim that
+  Playwright always dispatches `change` was wrong, and the row was corrected.
+- **Test bugs, not app bugs.**
+  - A new contrast test composited colours with decimals that the old `contrast()` helper
+    mis-parsed, reporting false failures. Fixed by rounding.
+  - An E9 test assumed A could be set to 70. The app correctly clamped it to 71.
+- **Code slips caught before committing.**
+  - A width fallback that could never apply.
+  - A CSS `isolation` rule that has no effect in SVG.
+  - A lost newline in the stylesheet.
+- **A UI wobble.** A theme-switch click in a test kept failing Playwright's stability check. A
+  real mouse click worked, but the cause was the selected label turning bold and shifting its
+  neighbours, so the weight was made constant.
+- **Process.** One shell command hung (a stray `cat` waiting on input) and was stopped. An
+  attempt to use `git stash` for a before/after check was declined by me and replaced with
+  serving the old file from a scratch folder.
+
+**Human review**
+I approved the plan before implementation. [To complete: my review of the Stage 2B commits.]

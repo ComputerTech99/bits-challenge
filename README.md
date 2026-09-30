@@ -21,9 +21,20 @@ upload area.
   be entered.
 - **Check borderline students:** everyone within 1–3 marks below a cutoff, with
   a one-click "Lower A to 78 (+3 students)".
+- **Undo, redo and reset** next to the chart (also Ctrl/Cmd+Z and
+  Shift+Ctrl/Cmd+Z). A whole drag is one step, each changed cutoff has its own
+  "Reset to 80", and "Reset to defaults" can be undone from an inline notice.
+- **Track progress across courses:** each course shows Not started, In progress
+  or Downloaded, and cutoffs are kept per course. They survive a refresh when you
+  upload the same file again (see "What it stores" below).
+- **Find a student** by BITS ID (from 4 characters, partial and
+  case-insensitive) to see their mark and current grade, with their bar
+  highlighted.
+- **Dark mode** that follows your system, with a Light / Dark / System switch.
 - **Review, then download.** A review dialog summarises the grade counts, the
-  cutoffs changed from the defaults, and anyone still on a boundary before the
-  CSV downloads. The CSV format is identical to Stage 1.
+  cutoffs changed from the defaults, exactly which students' grades differ from
+  the defaults (for example "20247096 · 79 · A- to A"), the grading time, and anyone
+  still on a boundary before the CSV downloads. The CSV format is identical to Stage 1.
 
 ## What it stores on your computer
 To survive a refresh, the app saves each course's **cutoffs and download status**
@@ -34,7 +45,7 @@ and your cutoffs come back, with a "Start over" option. If the browser blocks st
 (for example in some private windows), the app works the same but doesn't remember.
 
 Details: [ENHANCEMENTS.md](ENHANCEMENTS.md) (Stage 2),
-[BUG_FIX_LOG.md](BUG_FIX_LOG.md) (Stage 1, bugs #1–#30),
+[BUG_FIX_LOG.md](BUG_FIX_LOG.md) (bugs #1–#35),
 [AI_USAGE.md](AI_USAGE.md) (how AI tools were used).
 
 ## Run it locally
@@ -57,4 +68,5 @@ npx playwright test         # run the Playwright suite (starts its own server)
 ```
 
 Screenshots for the docs are generated with
-`SHOTS_OUT=docs/screenshots/after npx playwright test -c playwright.screenshots.config.js scripts/screenshots.spec.js`.
+`SHOTS_OUT=docs/screenshots/after npx playwright test -c playwright.screenshots.config.js scripts/screenshots.spec.js`
+(add `SHOTS_THEME=dark` for the dark set).
