@@ -1,7 +1,8 @@
 // Trims the whitespace around assets/logo.png and scales it to 96px tall (2x its
 // 48px display height), writing assets/logo-96.webp. index.html inlines the
 // WebP as a data URI so the app stays a single self-contained file. It also
-// writes assets/favicon-64.png (the seal only), inlined as the favicon.
+// writes assets/favicon-64.png (the seal only), inlined as the favicon, and
+// assets/seal-96.png, the same seal at 2x its 40px size in the dark app bar.
 // Usage: node scripts/make-logo.mjs
 
 import { chromium } from "@playwright/test";
@@ -29,7 +30,7 @@ const out = await page.evaluate(async src => {
 }, src);
 // Favicon: just the seal (the full lockup is unreadable at 16px), on a
 // transparent background so it sits cleanly on light and dark tab bars.
-const icon = await page.evaluate(async src => {
+const seal = size => page.evaluate(async ([src, size]) => {
   const img = new Image(); img.src = src; await img.decode();
   const c = document.createElement("canvas"); c.width = img.width; c.height = img.height;
   const ctx = c.getContext("2d"); ctx.drawImage(img, 0, 0);
@@ -58,13 +59,15 @@ const icon = await page.evaluate(async src => {
   ctx.putImageData(id, 0, 0);
   const side = Math.max(x1 - x0, y1 - y0) + 1;
   const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-  const o = document.createElement("canvas"); o.width = o.height = 64;
+  const o = document.createElement("canvas"); o.width = o.height = size;
   const octx = o.getContext("2d"); octx.imageSmoothingQuality = "high";
-  octx.drawImage(c, cx - side / 2, cy - side / 2, side, side, 0, 0, 64, 64);
+  octx.drawImage(c, cx - side / 2, cy - side / 2, side, side, 0, 0, size, size);
   return { box: [x0, y0, x1, y1], png: o.toDataURL("image/png") };
-}, src);
+}, [src, size]);
+const icon = await seal(64), big = await seal(96);
 fs.writeFileSync("assets/favicon-64.png", Buffer.from(icon.png.split(",")[1], "base64"));
-console.log("seal box", icon.box, "favicon b64", icon.png.length);
+fs.writeFileSync("assets/seal-96.png", Buffer.from(big.png.split(",")[1], "base64"));
+console.log("seal box", icon.box, "favicon b64", icon.png.length, "seal-96 b64", big.png.length);
 
 await browser.close();
 fs.writeFileSync("assets/logo-96.webp", Buffer.from(out.webp.split(",")[1], "base64"));

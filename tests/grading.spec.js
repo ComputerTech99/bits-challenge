@@ -1744,10 +1744,25 @@ for (const scheme of ["light", "dark"]) {
   });
 }
 
-test("E8: the logo sits on a light plate in the dark theme", async ({ page }) => {
+// Stage 2C: rewritten from "the logo sits on a light plate". No plate: in
+// dark the seal stands alone, followed by the name set as text in --ink.
+test("E8: in the dark theme the seal and the name as text replace the lockup, with no plate", async ({ page }) => {
+  const heading = page.getByRole("heading", { level: 1 });
+  await expect(page.locator(".logo")).toBeVisible();
+  await expect(page.locator(".logo-dark")).toBeHidden();
+  await expect(heading).toHaveAccessibleName("BITS Pilani Digital");
   await page.emulateMedia({ colorScheme: "dark" });
-  const bg = await page.locator(".logo").evaluate(img => getComputedStyle(img).backgroundColor);
-  expect(bg).toBe("rgb(245, 244, 250)");
+  await expect(page.locator(".logo")).toBeHidden();
+  await expect(page.locator(".seal")).toBeVisible();
+  await expect(page.locator(".seal")).toHaveAttribute("alt", ""); // the text names it
+  await expect(page.locator(".wordmark")).toHaveText("BITS Pilani Digital");
+  await expect(heading).toHaveAccessibleName("BITS Pilani Digital");
+  const c = await page.evaluate(() => ({
+    word: getComputedStyle(document.querySelector(".wordmark")).color, ink: getComputedStyle(document.body).color,
+    bgs: [".seal", ".logo-dark", ".wordmark"].map(s => getComputedStyle(document.querySelector(s)).backgroundColor) }));
+  expect(c.word).toBe(c.ink);
+  for (const bg of c.bgs) expect(bg).toBe("rgba(0, 0, 0, 0)");
+  expect(await page.locator(".seal").evaluate(img => img.naturalWidth)).toBe(96); // 2x for sharp screens
 });
 
 // ===== E9: impact of changes in the review dialog =====
