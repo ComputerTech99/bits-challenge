@@ -16,9 +16,9 @@ marks file (3 courses, 148 students).
 ## What changed
 
 ### Debug
-I fixed the 30 bugs in the original app, and 18 more (#31–#52) found in
-hands-on reviews of my own changes. Each fix has a failing test first. The
-most consequential ones:
+I fixed the 30 bugs in the original app (#1–#30), plus 19 more issues found in
+hands-on reviews of my own changes (#31–#52; #47–#49 are styling, logged in
+ENHANCEMENTS.md). Every fix is covered by a test. The most consequential:
 - **Students silently disappeared.** A decimal mark, or ranges that left a gap
   in 0–100, meant a student got no grade and was left out of the export
   (#7, #8). Every student now gets exactly one grade.
@@ -73,17 +73,27 @@ npx playwright install
 npx playwright test          # full suite: Chromium, WebKit and Firefox
 ```
 
-| Browser  | Full suite                   | Where                    |
-|----------|------------------------------|--------------------------|
-| Chromium | 192 passed                   | macOS and GitHub Actions |
-| WebKit   | 190 passed, 2 skipped¹       | macOS and GitHub Actions |
-| Firefox  | _pending CI_                 | GitHub Actions (Ubuntu)  |
+Results on the final commit (`tests/live-smoke.spec.js` is skipped unless `LIVE=1`):
+
+| Browser  | Full suite             | Live smoke (GitHub Pages) | Where                    |
+|----------|------------------------|---------------------------|--------------------------|
+| Chromium | 192 passed             | passed                    | macOS and GitHub Actions |
+| WebKit   | 190 passed, 2 skipped¹ | passed                    | macOS and GitHub Actions |
+| Firefox  | 190 passed, 2 skipped¹ | passed                    | GitHub Actions (Ubuntu)  |
 
 ¹ The two touch-drag tests need the Chrome DevTools Protocol, so they only
 run in Chromium.
 
-CI runs the suite on every push to `main`
-([workflow](.github/workflows/test.yml)).
+The live smoke test downloads the sample file through the in-app link,
+uploads it, checks the statistics and grade counts, moves A to 78, reviews,
+and compares the downloaded CSV line by line with the expected file:
+```sh
+LIVE=1 npx playwright test tests/live-smoke.spec.js
+```
+
+CI runs the suite in all three browsers on every push to `main`
+([workflow](.github/workflows/test.yml)); the live smoke test runs from the
+same workflow on demand. Screenshots of the live site: [docs/screenshots/live/](docs/screenshots/live/).
 
 ## Project structure
 ```
@@ -91,10 +101,10 @@ index.html              the app (the only file that ships)
 assets/                 logo, OG image, vendored SheetJS fallback
 fixtures/               .xlsx test files, their generator, demo_marks.xlsx
 tests/                  Playwright suite, golden CSVs, live smoke test
+.github/workflows/      CI (three browsers) and the Pages deploy
 scripts/                screenshot and logo tooling (dev only)
 docs/screenshots/       before/after, final and live screenshots
 original/               the untouched challenge source
-.github/workflows/      CI: the suite in three browsers
 BUG_FIX_LOG.md          every bug: repro, cause, fix, test
 ENHANCEMENTS.md         Stage 2: problem, solution, how tested
 AI_USAGE.md             how AI tools were used
@@ -113,8 +123,10 @@ These were considered and deliberately left as they are.
 - **The longest course status is cut off on a phone.** At 390px, "Introduction
   to Programming (Changed since download)" is wider than the course select.
   The native option list shows it in full.
-- **Firefox is tested on CI only.** Playwright 1.63's Firefox doesn't launch on
-  the macOS 27 development machine, so Firefox runs on GitHub Actions (Ubuntu).
+- **Firefox is tested on CI, not on the development Mac.** Playwright 1.63's
+  Firefox build doesn't launch on macOS 27, so Firefox runs on GitHub Actions
+  (Ubuntu), where the full suite and the live smoke test pass (#51). This
+  affects testing only; nothing in the app differs in Firefox.
 
 ## AI use
 This project was built with Claude Code. What it did and what I reviewed is

@@ -19,7 +19,7 @@ I used Claude Code in the terminal, working from `CLAUDE.md` and a written Stage
 - A histogram screenshot showed the 10 px bin labels still running together, so they were reduced to 9 px.
 
 **Human review**
-I reviewed every change (code, tests, fixtures and documentation) before accepting it, and I can explain each fix. Product decisions not already covered by `CLAUDE.md` were listed for me by Claude Code, and I confirmed them.
+I reviewed every change (code, tests, fixtures and documentation) before accepting it, and I can explain each fix. Product decisions not already covered by `CLAUDE.md` were listed for me by Claude Code, and I confirmed them. I approved the plan before implementation. The implementation was sometimes not enough, or the fix was not appropriate, and it took several turns to get it right. Sometimes that was a debugging issue, and sometimes it may have been a prompting issue.
 
 ## 2026-09-29: Stage 1 follow-up (#26–#30), Claude Code (Claude Opus 5.5)
 
@@ -39,7 +39,7 @@ I gave Claude Code five further issues and a clean-up list, under the same rules
 - The commits for #1–#25 are missing the `Co-Authored-By` trailer. Rewriting that history was blocked and left for me to decide. The commits from this session include it.
 
 **Human review**
-I reviewed every change in this session (code, tests, fixtures and documentation) before accepting it.
+I reviewed every change in this session (code, tests, fixtures and documentation) before accepting it. I approved the plan before implementation. The implementation was sometimes not enough, or the fix was not appropriate, and it took several turns to get it right. Sometimes that was a debugging issue, and sometimes it may have been a prompting issue.
 
 ## 2026-09-29: Stage 2 (Reimagine), Claude Code (Claude Opus 5.5)
 
@@ -87,7 +87,10 @@ borderline action rule, how to handle the lift/pulse tests, and the
 
 **Human review**
 I reviewed every change in this session (code, tests, fixtures, screenshots and
-documentation) before accepting it.
+documentation) before accepting it. I approved the plan before implementation.
+The implementation was sometimes not enough, or the fix was not appropriate, and
+it took several turns to get it right. Sometimes that was a debugging issue, and
+sometimes it may have been a prompting issue.
 
 ## 2026-09-29 to 2026-09-30: Stage 2B (fixes from review + E5–E9), Claude Code (Claude Opus 5.5)
 
@@ -149,7 +152,7 @@ waited for my approval before changing anything.
   serving the old file from a scratch folder.
 
 **Human review**
-I approved the plan before implementation. [To complete: my review of the Stage 2B commits.]
+I approved the plan before implementation. The implementation was sometimes not enough, or the fix was not appropriate, and it took several turns to get it right. Sometimes that was a debugging issue, and sometimes it may have been a prompting issue.
 
 ## 2026-09-30: Stage 2C (restraint pass), Claude Code (Claude Opus 5.5)
 
@@ -168,7 +171,7 @@ I approved the plan before implementation. [To complete: my review of the Stage 
 - **Two script slips.** A token regex left two `--g-*-on` lines behind. A replacement aborted because one string was a substring of another, which also skipped a test edit. The failing test caught the second one.
 
 **Human review**
-I approved the plan before implementation. [To complete: my review of the Stage 2C commits.]
+I approved the plan before implementation. The implementation was sometimes not enough, or the fix was not appropriate, and it took several turns to get it right. Sometimes that was a debugging issue, and sometimes it may have been a prompting issue.
 
 ## 2026-09-30: Stage 2D (chart colour), Claude Code (Claude Opus 5.5)
 
@@ -190,7 +193,7 @@ I approved the plan before implementation. [To complete: my review of the Stage 
 **Open point for me:** at 390px a bar is ~3px wide, so the 1.5px ink outline covers most of a focused bar's fill; in dark it reads as a near-white bar.
 
 **Human review**
-I approved the plan before implementation. [To complete: my review of the Stage 2D commits.]
+I approved the plan before implementation. The implementation was sometimes not enough, or the fix was not appropriate, and it took several turns to get it right. Sometimes that was a debugging issue, and sometimes it may have been a prompting issue.
 
 ## 2026-09-30: Final fixes (#36–#50), Claude Code (Claude Opus 5.5)
 
@@ -223,4 +226,31 @@ I approved the plan before implementation. [To complete: my review of the Stage 
 **Decisions CLAUDE.md didn't cover:** a colliding handle label hides its whole pill, not only the text; the hovered or dragged handle always keeps its label. The action bar stays sticky, and its height is reserved with `scroll-padding-bottom`: no extra page padding, because a sticky bar sits in the page flow at the bottom. `theme-color` matches `--surface` (the app bar), not `--canvas`. The OG image hides the sticky bar so the x-axis shows.
 
 **Human review**
-I approved the plan before implementation. [To complete: my review of the final-fixes commits.]
+I approved the plan before implementation. The implementation was sometimes not enough, or the fix was not appropriate, and it took several turns to get it right. Sometimes that was a debugging issue, and sometimes it may have been a prompting issue.
+
+## 2026-09-30: Ship it (#51, #52, README, GitHub Pages), Claude Code (Claude Opus 5.5)
+
+**What I asked for:** No new features. Check the gates, settle the Firefox question (#51), remove the line stub under a hidden handle label (#52), rewrite the README for an evaluator, prepare for and deploy to GitHub Pages, and verify the live site in all three browsers.
+
+**What the AI did**
+- Ran the gates and reported them. The AI_USAGE placeholders were still open (those lines are mine), and Firefox couldn't launch locally. I chose to run Firefox on GitHub Actions.
+- #51: added `.github/workflows/test.yml` (the suite in three engines on every push; the live smoke test on demand). Firefox passed on its first CI run: 190 passed, 2 skipped. There were no app differences, so no app fix was made.
+- #52: a hidden label's cutoff line now starts at the plot's top. The test failed on the previous build. Its first version was flaky in WebKit under parallel load and now waits with `expect.poll`.
+- Added og:url, `.nojekyll` and more `.gitignore` entries. Scanned tracked files for tokens, personal paths and email addresses and found none. Rewrote the README.
+- I made the repo public and added the Pages deploy workflow (`static.yml`) myself. The AI tagged v1.0, pushed, checked every asset with `curl -sI`, and wrote `tests/live-smoke.spec.js` (skipped unless `LIVE=1`).
+
+**Results**
+
+| Engine | Suite (local / CI) | Live smoke |
+|---|---|---|
+| Chromium | 192 passed / 192 passed | passed (local and CI) |
+| WebKit | 190 passed, 2 skipped / same | passed (local and CI) |
+| Firefox | can't launch / 190 passed, 2 skipped | passed (CI) |
+
+**Where the AI got things wrong, and how that was caught**
+- **Pushing a workflow without the right scope.** The first push was refused because the `gh` token lacked the `workflow` scope. I refreshed it.
+- **Trying to reorder unpushed commits** to deploy without CI. The permission check blocked the history rewrite, so the scope fix was the way forward.
+- **A timing-sensitive test** (#52), caught by running the full suite three times before committing.
+
+**Human review**
+I approved the plan before implementation. The implementation was sometimes not enough, or the fix was not appropriate, and it took several turns to get it right. Sometimes that was a debugging issue, and sometimes it may have been a prompting issue.
