@@ -2220,3 +2220,16 @@ test.describe("#32 touch at 390px", () => {
     await expect(cutoffInput(page, "D")).toHaveValue("20");
   });
 });
+
+// ===== Final fixes from the review of the colour build (#41 onward) =====
+
+test("#41 chip dots stay round on the wider chips (A-, B-, C-)", async ({ page }) => {
+  await startGrading(page, "demo_marks.xlsx", INTRO);
+  const dots = await page.locator("#grades .chip, #gradeSummary .chip").evaluateAll(chips =>
+    chips.map(c => {
+      const s = getComputedStyle(c, "::before");
+      return { g: c.dataset.grade, w: parseFloat(s.width), h: parseFloat(s.height) };
+    }));
+  expect(dots.length).toBe(16);
+  for (const d of dots) expect(d, d.g).toEqual({ g: d.g, w: 8, h: 8 });
+});

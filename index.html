@@ -450,6 +450,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 }
 .chip::before{
   content:"";
+  flex-shrink:0; /* a fixed circle; the wider chips (A-, B-) squashed it (#41) */
   width:8px;
   height:8px;
   border-radius:50%;
