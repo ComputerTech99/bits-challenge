@@ -19,7 +19,7 @@
   color-scheme:light;
   --ink:#1c1a33; --ink-muted:#5f5b78; --rule:#e3e0ef; --rule-strong:#c9c3de;
   --canvas:#f5f4fa; --surface:#ffffff;
-  --accent:#5b3cc4; --accent-strong:#312e81; --accent-soft:#eeeafb;
+  --accent:#5b3cc4; --accent-soft:#eeeafb;
   --on-accent:#ffffff;             /* text on an accent fill */
   --danger:#b42318; --danger-soft:#fef3f2; --danger-rule:#f1c4bf;
   --shadow:0 24px 48px rgba(28,26,51,.24); --backdrop:rgba(28,26,51,.4);
@@ -38,7 +38,7 @@
   color-scheme:dark;
   --ink:#ecebf5; --ink-muted:#a6a3bf; --rule:#2e2c45; --rule-strong:#45425f;
   --canvas:#121120; --surface:#1b1a2e;
-  --accent:#9b87f0; --accent-strong:#cfc6ff; --accent-soft:#2a2650;
+  --accent:#9b87f0; --accent-soft:#2a2650;
   --on-accent:#121120;
   --danger:#f97066; --danger-soft:#3a1d22; --danger-rule:#6b2c2c;
   --shadow:0 24px 48px rgba(0,0,0,.5); --backdrop:rgba(0,0,0,.6);
@@ -49,7 +49,7 @@
     color-scheme:dark;
     --ink:#ecebf5; --ink-muted:#a6a3bf; --rule:#2e2c45; --rule-strong:#45425f;
     --canvas:#121120; --surface:#1b1a2e;
-    --accent:#9b87f0; --accent-strong:#cfc6ff; --accent-soft:#2a2650;
+    --accent:#9b87f0; --accent-soft:#2a2650;
     --on-accent:#121120;
     --danger:#f97066; --danger-soft:#3a1d22; --danger-rule:#6b2c2c;
     --shadow:0 24px 48px rgba(0,0,0,.5); --backdrop:rgba(0,0,0,.6);
@@ -70,7 +70,7 @@ body{
   background:var(--canvas);
   color:var(--ink);
 }
-h1,h2,h3{margin:0;font-weight:600;color:var(--accent-strong)}
+h1,h2,h3{margin:0;font-weight:600;color:var(--ink)} /* purple is reserved for the accent */
 h2{font-size:16px}
 .num,input,select,.stat b,#timerText{font-variant-numeric:tabular-nums}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}

@@ -1717,6 +1717,22 @@ test("E8: the dark tokens are the same whether chosen or from the system", async
   expect(fromSystem["--canvas"]).toBe("#121120");
 });
 
+// Stage 2C: purple is reserved for the accent; every heading is ink, weight 600.
+for (const scheme of ["light", "dark"]) {
+  test(`Stage 2C: panel and dialog headings are ink, weight 600 (${scheme})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await startGrading(page, "demo_marks.xlsx", INTRO);
+    await page.click("#reviewBtn");
+    const heads = await page.locator("h2, h3").evaluateAll(hs => hs.map(h => {
+      const cs = getComputedStyle(h);
+      return { text: h.textContent, color: cs.color, weight: cs.fontWeight };
+    }));
+    const ink = await page.evaluate(() => getComputedStyle(document.body).color);
+    expect(heads.length).toBeGreaterThan(5);
+    for (const h of heads) expect.soft(h, h.text).toMatchObject({ color: ink, weight: "600" });
+  });
+}
+
 test("E8: no component hard-codes a colour; only the token blocks define them", async () => {
   const html = require("fs").readFileSync(require("path").join(__dirname, "..", "index.html"), "utf8");
   const css = html.match(/<style>([\s\S]*?)<\/style>/)[1]
