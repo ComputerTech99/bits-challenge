@@ -10,11 +10,14 @@ test.beforeEach(async ({ page }) => {
   await openApp(page);
 });
 
-// Install a fake clock that only moves when the test advances it.
+// Install a fake clock that only moves when the test advances it. It is
+// paused before the page loads (#36): Playwright replays the pause into the
+// new document, so however long the load takes, the page starts at 09:00:01
+// and time moves only when the test advances it.
 async function pausedClock(page) {
   await page.clock.install({ time: new Date(2026, 0, 1, 9, 0, 0) });
-  await page.goto("/");
   await page.clock.pauseAt(new Date(2026, 0, 1, 9, 0, 1));
+  await page.goto("/");
 }
 
 test("#1 Min and Max stats show the right values", async ({ page }) => {
@@ -179,6 +182,18 @@ test("#11 timer starts on the first course selection, not on page load", async (
   await expect(page.locator("#timerText")).toHaveText("00:00");
   await page.clock.fastForward(65_000);
   await expect(page.locator("#timerText")).toHaveText("01:05");
+});
+
+test("#36 the paused clock survives a page that takes over a second to load", async ({ page }) => {
+  // A slow machine or a busy worker: hold SheetJS (a blocking script) for 1.5 s.
+  await page.route("**/npm/xlsx*/dist/xlsx.full.min.js", async route => {
+    await new Promise(r => setTimeout(r, 1500));
+    await route.fallback();
+  });
+  await pausedClock(page);
+  await startGrading(page, "valid_basic.xlsx", "CS F211");
+  await page.clock.fastForward(7_000);
+  await expect(page.locator("#timerText")).toHaveText("00:07");
 });
 
 test("#11 timer runs a single interval and stops on finalize", async ({ page }) => {
