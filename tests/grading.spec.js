@@ -1046,6 +1046,10 @@ test("a11y: errors, notes and count changes are announced", async ({ page }) => 
 });
 
 test("a11y: the whole flow works from the keyboard alone", async ({ page }) => {
+  // Stage 2B (E8): the theme switch in the app bar is the first stop (one stop
+  // for the whole radio group), then the name field.
+  await page.keyboard.press("Tab");
+  await expect(page.locator('.theme-switch input[value="system"]')).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.locator("#instructor")).toBeFocused();
   await page.keyboard.type("Dr Rao");
@@ -1591,6 +1595,93 @@ test("E7: no match says so, naming the course", async ({ page }) => {
   const other = rows.find(r => r.Course === "Linear Algebra" && !introIds.has(String(r["BITS ID"])));
   await findStudent(page, String(other["BITS ID"]));
   await expect(results(page)).toHaveText(`No student with that ID in ${INTRO}.`);
+});
+
+// ===== E8: dark mode =====
+
+const bodyBg = page => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+const LIGHT_CANVAS = "rgb(245, 244, 250)", DARK_CANVAS = "rgb(18, 17, 32)";
+
+test("E8: follows the system theme by default", async ({ page }) => {
+  await expect(page.locator('.theme-switch input[value="system"]')).toBeChecked();
+  expect(await bodyBg(page)).toBe(LIGHT_CANVAS);
+  await page.emulateMedia({ colorScheme: "dark" });
+  expect(await bodyBg(page)).toBe(DARK_CANVAS);
+});
+
+test("E8: Light and Dark override the system, and the choice survives a reload", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.getByRole("radio", { name: "Light" }).check();
+  expect(await bodyBg(page)).toBe(LIGHT_CANVAS);
+  await page.reload();
+  await expect(page.locator('.theme-switch input[value="light"]')).toBeChecked();
+  expect(await bodyBg(page)).toBe(LIGHT_CANVAS);
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.getByRole("radio", { name: "Dark" }).check();
+  expect(await bodyBg(page)).toBe(DARK_CANVAS);
+  await page.getByRole("radio", { name: "System" }).check();
+  expect(await bodyBg(page)).toBe(LIGHT_CANVAS);
+  await page.reload();
+  await expect(page.locator('.theme-switch input[value="system"]')).toBeChecked();
+});
+
+test("E8: the theme switch works from the keyboard", async ({ page }) => {
+  await page.locator('.theme-switch input[value="system"]').focus();
+  await page.keyboard.press("ArrowLeft"); // radios: arrows move the choice
+  await expect(page.locator('.theme-switch input[value="dark"]')).toBeChecked();
+  expect(await bodyBg(page)).toBe(DARK_CANVAS);
+});
+
+test("E8: the dark tokens are the same whether chosen or from the system", async ({ page }) => {
+  const tokens = () => page.evaluate(() => {
+    const css = getComputedStyle(document.documentElement);
+    const rules = sh => { try { return [...sh.cssRules]; } catch { return []; } }; // skip cross-origin (fonts)
+    const all = r => r.cssRules ? [r, ...[...r.cssRules].flatMap(all)] : [r];       // into @media blocks
+    const names = [...document.styleSheets].flatMap(rules).flatMap(all).flatMap(r =>
+      r.style ? [...r.style].filter(p => p.startsWith("--")) : []);
+    return Object.fromEntries([...new Set(names)].map(n => [n, css.getPropertyValue(n).trim()]));
+  });
+  await page.emulateMedia({ colorScheme: "dark" });
+  const fromSystem = await tokens();
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.getByRole("radio", { name: "Dark" }).check();
+  expect(await tokens()).toEqual(fromSystem);
+  expect(fromSystem["--canvas"]).toBe("#121120");
+});
+
+test("E8: no component hard-codes a colour; only the token blocks define them", async () => {
+  const html = require("fs").readFileSync(require("path").join(__dirname, "..", "index.html"), "utf8");
+  const css = html.match(/<style>([\s\S]*?)<\/style>/)[1]
+    .replace(/\/\*[\s\S]*?\*\//g, "")          // comments
+    .replace(/--[\w-]+\s*:[^;}]*[;}]?/g, "");   // token declarations
+  expect(css.match(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/gi)).toBeNull();
+  const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).join("\n");
+  expect(scripts.match(/#[0-9a-f]{6}\b|#[0-9a-f]{3}\b(?![\w-])|rgba?\(/gi)).toBeNull();
+});
+
+for (const scheme of ["light", "dark"]) {
+  test(`E8: grade chips are AA and bars 3:1 in the ${scheme} theme`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await startGrading(page, "demo_marks.xlsx", INTRO);
+    const chips = await page.locator("#gradeSummary .chip").evaluateAll(els =>
+      els.map(e => ({ g: e.textContent, fg: getComputedStyle(e).color, bg: getComputedStyle(e).backgroundColor })));
+    for (const c of chips) expect.soft(contrast(c.fg, c.bg), `chip ${c.g}`).toBeGreaterThanOrEqual(4.5);
+    const ratios = await barBandContrasts(page);
+    ratios.forEach((r, i) => expect.soft(r, `bar ${chips[i].g}`).toBeGreaterThanOrEqual(3));
+    // Body text and muted text on the panel surface.
+    const text = await page.evaluate(() => {
+      const panel = getComputedStyle(document.querySelector(".panel")).backgroundColor;
+      return { ink: getComputedStyle(document.body).color, muted: getComputedStyle(document.querySelector(".help")).color, panel };
+    });
+    expect(contrast(text.ink, text.panel)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(text.muted, text.panel)).toBeGreaterThanOrEqual(4.5);
+  });
+}
+
+test("E8: the logo sits on a light plate in the dark theme", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  const bg = await page.locator(".logo").evaluate(img => getComputedStyle(img).backgroundColor);
+  expect(bg).toBe("rgb(245, 244, 250)");
 });
 
 test.describe("#32 touch at 390px", () => {

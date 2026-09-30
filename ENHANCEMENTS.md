@@ -12,6 +12,7 @@ the end of a trimester:
 | E5 | "What if I drag the wrong line?" | Undo, redo and reset where you need them |
 | E6 | "Which of my courses are done, and will a refresh lose my work?" | Per-course progress and autosave |
 | E7 | "A student asks: what did I get?" | Find a student |
+| E8 | "I grade late at night, and the white page glares." | Dark mode |
 
 All grade calculations go through one function, `gradeFor(mark)`. The counts, the
 distribution table, the chart, the borderline list and the CSV export can't
@@ -380,6 +381,43 @@ the student will get.
 - An unknown ID, or an ID that is only in another course, gives the "No student…" line naming
   the course.
 
+## E8: Dark mode
+
+**Problem.** Grading happens in long sessions, often in the evening, and a bright white
+page is tiring. Many instructors already run their OS in dark mode, and the app ignored that.
+
+**Solution.**
+- It follows `prefers-color-scheme` by default. A **Light / Dark / System** switch in the app bar
+  (real radio buttons, so arrow keys work) overrides it. The choice is saved with E6's guarded
+  storage and applied by a tiny script in `<head>` before first paint, so there's no flash.
+- **Tokens only.** Dark mode redefines the CSS custom properties and nothing else. First every
+  hard-coded colour was replaced with a token:
+  - `#c9c3de` became `--rule-strong`
+  - white on buttons and chips became `--on-accent` and `--g-X-on`
+  - the error pinks became `--danger-soft` and `--danger-rule`
+  - the dialog shadow and backdrop, and the tooltip, got tokens too
+  - `<dialog>` now has an explicit surface background
+  - `color-scheme` switches native controls
+- **Retuned colours.**
+  - The dark grade colours are lightened so every bar keeps 3:1 against its band. A-, B- and C-
+    chips switch to dark text for AA.
+  - The accent is lighter (`#9b87f0`), so primary buttons get dark text, because white on it would
+    be about 2.9:1.
+  - The logo sits on a light rounded plate.
+
+**How tested.** `E8` tests:
+- Follows the system by default.
+- Light and Dark override the system and survive a reload, and System goes back to following it.
+- The switch works with arrow keys.
+- The computed dark tokens are identical whether chosen or inherited from the system, so the two
+  CSS blocks can't drift.
+- No hex or rgb colour appears outside the token blocks, in CSS or script.
+- In both themes, every chip is AA, every bar is 3:1 against its band, and body and muted text
+  are AA on panels.
+- The logo plate is light in dark mode.
+
+Screenshots of every state were taken in dark as well as light.
+
 ## Visual redesign
 
 The four enhancements sit on a new foundation built to the CLAUDE.md design
@@ -485,6 +523,7 @@ rewritten to check the same guarantee through the new UI. None was deleted.
 | setup: collapses to a summary (summary text) | Stage 2B, #33: the summary no longer repeats the instructor, who is shown in the app bar. | The summary reads `demo_marks.xlsx · 148 students · 3 courses`. Collapse, Edit and focus are checked as before. |
 | setup: collapses to a summary (summary text), again | E6 adds progress to the summary. | `demo_marks.xlsx · 148 students · 0 of 3 courses downloaded`. The course count is part of the progress. |
 | #31b (a new upload clears every course's cutoffs) | E6 restores a file's saved cutoffs when the *same* file is uploaded again, which this test used to do. | The same in-memory guarantee through a different file with the same course names (`valid_basic` then `clustered_marks`). Restoring the same file is covered by the E6 tests. |
+| a11y: keyboard walkthrough (first Tab) | E8 added the theme switch to the app bar, which comes before the setup. | The first Tab lands on the theme switch (one stop for the radio group), the second on the name field. The rest is unchanged. |
 | #19 ×2 (reset asks once / dismiss keeps cutoffs) | E5 moved the button to the chart panel header as "Reset to defaults" (`#resetAll`). Then #35 removed the `confirm()`. | The guarantee that a reset never costs you your cutoffs, now through undo: (a) one click resets every cutoff and no dialog appears; (b) the notice's Undo restores the cutoffs. |
 | #22 (reset inert before a course) | E5: the button is inside the chart panel, which is hidden until a course is open. | Hidden and disabled on a fresh page and after an upload. A dispatched click causes no error and no dialog. |
 | E1: the action bar counts changes | E5: the reset button left the action bar. | Same counts. The enabled/disabled check now uses `#resetAll`. |

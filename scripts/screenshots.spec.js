@@ -6,6 +6,9 @@ const { openApp, startGrading, typeCutoff, download } = require("../tests/helper
 
 const OUT = process.env.SHOTS_OUT || "docs/screenshots/after";
 const WIDTHS = (process.env.SHOTS_WIDTHS || "1440,1024,390").split(",").map(Number);
+// SHOTS_THEME=dark emulates a dark system theme (E8); files get a "-dark" suffix.
+const THEME = process.env.SHOTS_THEME || "light";
+const SUFFIX = THEME === "dark" ? "-dark" : "";
 const DEMO = "demo_marks.xlsx", COURSE = "Introduction to Programming";
 
 const STATES = {
@@ -68,6 +71,7 @@ for (const width of WIDTHS) {
   for (const name of ONLY) {
     test(`${name} @ ${width}`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
+      await page.emulateMedia({ colorScheme: THEME });
       await openApp(page, { realFonts: true });
       await page.evaluate(() => document.fonts.ready);
       await STATES[name](page);
@@ -76,7 +80,7 @@ for (const width of WIDTHS) {
       const height = await page.evaluate(() => document.documentElement.scrollHeight);
       await page.setViewportSize({ width, height: Math.max(900, height) });
       await page.evaluate(() => scrollTo(0, 0)); // a reload can restore a scrolled position
-      await page.screenshot({ path: path.join(OUT, `${name}-${width}.png`) });
+      await page.screenshot({ path: path.join(OUT, `${name}-${width}${SUFFIX}.png`) });
     });
   }
 }

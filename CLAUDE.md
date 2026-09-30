@@ -76,6 +76,24 @@ ONE place: the histogram with its grade bands. Everything else stays quiet.
   surface, WCAG 1.4.11) and chip text needs AA. Chip text is white, except
   ink on B- and C-. No outline-style bars. Tests enforce both ratios.
 - The bell curve is `--ink-muted`, dashed. Never red.
+- Supporting tokens: `--rule-strong #c9c3de` (hover borders, axis, drop zone),
+  `--on-accent #ffffff` (text on accent fills), `--danger-soft #fef3f2` and
+  `--danger-rule #f1c4bf` (error panel), `--shadow` and `--backdrop` (dialog
+  only), `--logo-plate`/`--logo-pad` (transparent/0 in light), and `--g-X-on`
+  (chip text per grade).
+- **Dark theme (E8):** the same tokens are redefined under `:root[data-theme="dark"]`
+  and under `@media (prefers-color-scheme: dark) :root:not([data-theme="light"])`
+  (the two blocks must stay identical; a test compares them). No component may
+  name a colour of its own; a test fails on any hex/rgb outside the token blocks.
+  Canvas `#121120` · surface `#1b1a2e` · rule `#2e2c45` · rule-strong `#45425f` ·
+  ink `#ecebf5` · ink-muted `#a6a3bf` · accent `#9b87f0` · accent-strong `#cfc6ff` ·
+  accent-soft `#2a2650` · on-accent `#121120` (white fails AA on the light accent) ·
+  danger `#f97066` · danger-soft `#3a1d22` · danger-rule `#6b2c2c`. Dark grade
+  colours: A `#6b59d3` · A- `#9080de` · B `#226db7` · B- `#5593cf` · C `#16806f` ·
+  C- `#479c8d` · D `#a8661a` · E `#6b6f85`. Chip text: white, except `#121120`
+  on A-, B- and C-. The logo sits on a light plate (`#f5f4fa`, 4px 8px padding).
+  The Light / Dark / System toggle lives in the app bar and is saved in
+  `localStorage` (`gradingConsole:v1:theme`).
 
 **Type**: IBM Plex Sans throughout (400/500/600). Scale 12 / 14 / 16 / 20 / 24px.
 All numbers use `font-variant-numeric: tabular-nums`. Values are heavier than
